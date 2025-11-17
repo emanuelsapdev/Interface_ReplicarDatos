@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Platforms>AnyCPU;x64</Platforms>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Remove="C:\Users\emanu\.nuget\packages\nlog.config\4.7.15\contentFiles\any\any\NLog.config" />
+		<None Remove="C:\Users\emanu\.nuget\packages\nlog.schema\4.7.15\contentFiles\any\any\NLog.xsd" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Hosting.Extensions.Quartz" Version="1.1.1" />
+		<PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.7" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="7.0.0" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="NLog.Web.AspNetCore" Version="5.2.2" />
+		<PackageReference Include="Quartz" Version="3.14.0" />
+		<PackageReference Include="Quartz.Extensions.DependencyInjection" Version="3.14.0" />
+		<PackageReference Include="Quartz.Extensions.Hosting" Version="3.14.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+		<None Include="appsettings.*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <COMReference Include="SAPbobsCOM">
+	    <WrapperTool>tlbimp</WrapperTool>
+	    <VersionMinor>0</VersionMinor>
+	    <VersionMajor>10</VersionMajor>
+	    <Guid>fc8030be-f5d2-4b8e-8f92-44228fe30100</Guid>
+	    <Lcid>0</Lcid>
+	    <Isolated>false</Isolated>
+	    <EmbedInteropTypes>true</EmbedInteropTypes>
+	  </COMReference>
+	</ItemGroup>
+
+	<!--<ItemGroup>
+		<Content Update="nlog.config">
+			<Generator>SettingsSingleFileGenerator</Generator>
+			<LastGenOutput>nlog.Designer.cs</LastGenOutput>
+		</Content>
+	</ItemGroup>-->
+
+
+</Project>
