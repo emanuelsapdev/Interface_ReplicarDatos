@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Interface_ReplicarDatos.Replication
+namespace Interface_ReplicarDatos.Replication.Services
 {
     public class FieldMap
     {
@@ -32,7 +32,7 @@ namespace Interface_ReplicarDatos.Replication
             rs.DoQuery(@"
                         SELECT ""U_FromDB"",""U_ToDB"",""U_Table"",""U_Field"",
                                ""U_SourceVal"",""U_TargetVal"",""U_Fixed""
-                        FROM ""@REP_FMAP""");
+                        FROM ""@GNA_REP_FMAP""");
 
             while (!rs.EoF)
             {

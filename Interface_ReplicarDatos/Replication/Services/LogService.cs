@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Interface_ReplicarDatos.Replication 
+namespace Interface_ReplicarDatos.Replication.Services 
 
 { 
     public static class LogService
@@ -22,19 +22,13 @@ namespace Interface_ReplicarDatos.Replication
                 status = (status ?? "").Replace("'", "''");
                 detail = (detail ?? "").Replace("'", "''");
 
-                // 1) Busco el próximo DocEntry
-                rs.DoQuery(@"
-                SELECT IFNULL(MAX(""DocEntry""), 0) + 1 AS ""NextDocEntry""
-                FROM ""@REP_LOG""");
+                string code = $"{DateTime.Now:FFFFFFF}";
 
-                int nextDoc = Convert.ToInt32(rs.Fields.Item("NextDocEntry").Value);
-
-                // 2) Inserto incluyendo DocEntry
                 string sql = $@"
-                INSERT INTO ""@REP_LOG""
-                    (""DocEntry"",""U_Rule"",""U_Table"",""U_Key"",""U_Status"",""U_Detail"")
+                INSERT INTO ""@GNA_REP_LOG""
+                    (""Code"",""Name"",""U_Rule"",""U_Table"",""U_Key"",""U_Status"",""U_Detail"", ""U_LogDate"", ""U_LogTime"")
                 VALUES
-                    ({nextDoc}, '{ruleCode}', '{table}', '{key}', '{status}', '{detail}')";
+                    ('{code}','{code}', '{ruleCode}', '{table}', '{key}', '{status}', '{detail}', '{DateTime.Now:yyyy-MM-dd}', '{DateTime.Now:HHmmss}')";
 
                 rs.DoQuery(sql);
             }

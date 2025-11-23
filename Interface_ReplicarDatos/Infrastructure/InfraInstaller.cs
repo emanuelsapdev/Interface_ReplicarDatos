@@ -1,54 +1,53 @@
 ﻿using SAPbobsCOM;
 using System.Runtime.InteropServices;
 
-public interface IInfraInstaller
-{
-    void InstallInCompany(Company cmp);
-}
 
-public class InfraInstaller : IInfraInstaller
+public class InfraInstaller
 {
-    public void InstallInCompany(Company cmp)
+    public static void InstallInCompany(Company cmp)
     {
         // UDTs
-        CreateUDT(cmp, "@REP_CFG", "REP_CFG", BoUTBTableType.bott_MasterData);
-        CreateUDT(cmp, "@REP_CHECK", "REP_CHECK", BoUTBTableType.bott_MasterData);
-        CreateUDT(cmp, "@REP_LOG", "REP_LOG", BoUTBTableType.bott_Document);
-        CreateUDT(cmp, "@REP_FMAP", "REP_FIELD_MAP", BoUTBTableType.bott_MasterData);
+        CreateUDT(cmp, "@GNA_REP_CFG", "GNA_REP_CFG", BoUTBTableType.bott_NoObject);
+        CreateUDT(cmp, "@GNA_REP_CHECK", "GNA_REP_CHECK", BoUTBTableType.bott_NoObject);
+        CreateUDT(cmp, "@GNA_REP_LOG", "GNA_REP_LOG", BoUTBTableType.bott_NoObject);
+        CreateUDT(cmp, "@GNA_REP_FMAP", "GNA_REP_FIELD_MAP", BoUTBTableType.bott_NoObject);
 
-        // ----- @REP_CFG -----
-        CreateUDF(cmp, "@REP_CFG", "U_SrcDB", "Source DB", BoFieldTypes.db_Alpha, 50);
-        CreateUDF(cmp, "@REP_CFG", "U_DstDB", "Dest DB", BoFieldTypes.db_Alpha, 50);
-        CreateUDF(cmp, "@REP_CFG", "U_Table", "Table", BoFieldTypes.db_Alpha, 20);
-        CreateUDF(cmp, "@REP_CFG", "U_FilterSQL", "Filter SQL", BoFieldTypes.db_Memo, 254);
-        CreateUDF(cmp, "@REP_CFG", "U_ExcludeCSV", "Exclude Fields", BoFieldTypes.db_Memo, 254);
-        CreateUDF(cmp, "@REP_CFG", "U_AssignJSON", "Assign JSON", BoFieldTypes.db_Memo, 254);
-        CreateUDF(cmp, "@REP_CFG", "U_Active", "Active (Y/N)", BoFieldTypes.db_Alpha, 1);
+        // ----- @GNA_REP_CFG -----
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_SrcDB", "Source DB", BoFieldTypes.db_Alpha, 50);
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_DstDB", "Dest DB", BoFieldTypes.db_Alpha, 50);
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_Table", "Table", BoFieldTypes.db_Alpha, 20);
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_FilterSQL", "Filter SQL", BoFieldTypes.db_Memo, 254);
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_ExcludeCSV", "Exclude Fields", BoFieldTypes.db_Memo, 254);
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_AssignJSON", "Assign JSON", BoFieldTypes.db_Memo, 254);
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_Active", "Active (Y/N)", BoFieldTypes.db_Alpha, 1);
 
         // Campos específicos del audio (tipo BP y marca de propiedad)
-        CreateUDF(cmp, "@REP_CFG", "U_RepBPType", "BP Type (P/C/B)", BoFieldTypes.db_Alpha, 1);   // P=Prov, C=Cli, B=Ambos
-        CreateUDF(cmp, "@REP_CFG", "U_UseBPProperty", "Use BP Flag", BoFieldTypes.db_Alpha, 1);   // Y/N
-        CreateUDF(cmp, "@REP_CFG", "U_BPPropertyCode", "BP Flag Code", BoFieldTypes.db_Alpha, 20);  // ej: P01 o U_Replicate
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_RepBPType", "BP Type (P/C/B)", BoFieldTypes.db_Alpha, 1);   // P=Prov, C=Cli, B=Ambos
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_UseBPProperty", "Use BP Flag", BoFieldTypes.db_Alpha, 1);   // Y/N
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_BPPropertyCode", "BP Flag Code", BoFieldTypes.db_Alpha, 20);  // ej: P01 o U_Replicate
 
-        // ----- @REP_CHECK -----
-        CreateUDF(cmp, "@REP_CHECK", "U_LastDate", "Last Date", BoFieldTypes.db_Date);
-        CreateUDF(cmp, "@REP_CHECK", "U_LastTime", "Last Time", BoFieldTypes.db_Date, 0, BoFldSubTypes.st_Time);
+        // ----- @GNA_REP_CHECK -----
+        CreateUDF(cmp, "@GNA_REP_CHECK", "U_RuleCode", "Rule Code", BoFieldTypes.db_Alpha, 50);
+        CreateUDF(cmp, "@GNA_REP_CHECK", "U_LastDate", "Last Date", BoFieldTypes.db_Date);
+        CreateUDF(cmp, "@GNA_REP_CHECK", "U_LastTime", "Last Time", BoFieldTypes.db_Alpha, 8);
 
-        // ----- @REP_LOG -----
-        CreateUDF(cmp, "@REP_LOG", "U_Rule", "Rule Code", BoFieldTypes.db_Alpha, 50);
-        CreateUDF(cmp, "@REP_LOG", "U_Table", "Table", BoFieldTypes.db_Alpha, 20);
-        CreateUDF(cmp, "@REP_LOG", "U_Key", "Key", BoFieldTypes.db_Alpha, 100);
-        CreateUDF(cmp, "@REP_LOG", "U_Status", "Status", BoFieldTypes.db_Alpha, 20);
-        CreateUDF(cmp, "@REP_LOG", "U_Detail", "Detail", BoFieldTypes.db_Memo, 254);
+        // ----- @GNA_REP_LOG -----
+        CreateUDF(cmp, "@GNA_REP_LOG", "U_Rule", "Rule Code", BoFieldTypes.db_Alpha, 50);
+        CreateUDF(cmp, "@GNA_REP_LOG", "U_Table", "Table", BoFieldTypes.db_Alpha, 20);
+        CreateUDF(cmp, "@GNA_REP_LOG", "U_Key", "Key", BoFieldTypes.db_Alpha, 100);
+        CreateUDF(cmp, "@GNA_REP_LOG", "U_Status", "Status", BoFieldTypes.db_Alpha, 20);
+        CreateUDF(cmp, "@GNA_REP_LOG", "U_Detail", "Detail", BoFieldTypes.db_Memo, 254);
+        CreateUDF(cmp, "@GNA_REP_LOG", "U_LogDate", "LogDate", BoFieldTypes.db_Date);
+        CreateUDF(cmp, "@GNA_REP_LOG", "U_LogTime", "LogTime", BoFieldTypes.db_Alpha, 8);
 
-        // ----- @REP_FMAP ----- (mapeo de valores por base)
-        CreateUDF(cmp, "@REP_FMAP", "U_FromDB", "From DB", BoFieldTypes.db_Alpha, 50);
-        CreateUDF(cmp, "@REP_FMAP", "U_ToDB", "To DB", BoFieldTypes.db_Alpha, 50);
-        CreateUDF(cmp, "@REP_FMAP", "U_Table", "Table", BoFieldTypes.db_Alpha, 20);
-        CreateUDF(cmp, "@REP_FMAP", "U_Field", "Field", BoFieldTypes.db_Alpha, 50);
-        CreateUDF(cmp, "@REP_FMAP", "U_SourceVal", "Source Value", BoFieldTypes.db_Alpha, 100);
-        CreateUDF(cmp, "@REP_FMAP", "U_TargetVal", "Target Value", BoFieldTypes.db_Alpha, 100);
-        CreateUDF(cmp, "@REP_FMAP", "U_Fixed", "Fixed (Y/N)", BoFieldTypes.db_Alpha, 1);
+        // ----- @GNA_REP_FMAP ----- (mapeo de valores por base)
+        CreateUDF(cmp, "@GNA_REP_FMAP", "U_FromDB", "From DB", BoFieldTypes.db_Alpha, 50);
+        CreateUDF(cmp, "@GNA_REP_FMAP", "U_ToDB", "To DB", BoFieldTypes.db_Alpha, 50);
+        CreateUDF(cmp, "@GNA_REP_FMAP", "U_Table", "Table", BoFieldTypes.db_Alpha, 20);
+        CreateUDF(cmp, "@GNA_REP_FMAP", "U_Field", "Field", BoFieldTypes.db_Alpha, 50);
+        CreateUDF(cmp, "@GNA_REP_FMAP", "U_SourceVal", "Source Value", BoFieldTypes.db_Alpha, 100);
+        CreateUDF(cmp, "@GNA_REP_FMAP", "U_TargetVal", "Target Value", BoFieldTypes.db_Alpha, 100);
+        CreateUDF(cmp, "@GNA_REP_FMAP", "U_Fixed", "Fixed (Y/N)", BoFieldTypes.db_Alpha, 1);
 
         // ----- UDF en OCRD para marcar replicación -----
         CreateUDF(cmp, "OCRD", "U_Replicate", "Replicar (Y/N)", BoFieldTypes.db_Alpha, 1);
@@ -56,7 +55,7 @@ public class InfraInstaller : IInfraInstaller
 
     // ========== Helpers privados ==========
 
-    private void CreateUDT(Company c, string tableName, string description, BoUTBTableType type)
+    private static void CreateUDT(Company c, string tableName, string description, BoUTBTableType type)
     {
         // tableName viene con @, el SDK quiere el nombre sin @
         string shortName = tableName.StartsWith("@") ? tableName.Substring(1) : tableName;
@@ -80,13 +79,14 @@ public class InfraInstaller : IInfraInstaller
                 }
             }
         }
+        catch { throw; }
         finally
         {
             Marshal.ReleaseComObject(ut);
         }
     }
 
-    private void CreateUDF(Company c, string tableName, string alias, string desc,
+    private static void CreateUDF(Company c, string tableName, string alias, string desc,
                            BoFieldTypes type,  int size = 0, BoFldSubTypes subType = BoFldSubTypes.st_None)
     {
         var uf = (UserFieldsMD)c.GetBusinessObject(BoObjectTypes.oUserFields);
@@ -107,9 +107,12 @@ public class InfraInstaller : IInfraInstaller
                 c.GetLastError(out int code, out string msg);
                 // -2035 = UDF ya existe → lo ignoramos
                 if (code != -2035)
+                {
                     throw new Exception($"Error creando UDF {alias} en {tableName}: {code} - {msg}");
+                }
             }
         }
+        catch { throw; }
         finally
         {
             Marshal.ReleaseComObject(uf);

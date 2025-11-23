@@ -41,6 +41,10 @@
 	  </COMReference>
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Information\" />
+	</ItemGroup>
+
 	<!--<ItemGroup>
 		<Content Update="nlog.config">
 			<Generator>SettingsSingleFileGenerator</Generator>

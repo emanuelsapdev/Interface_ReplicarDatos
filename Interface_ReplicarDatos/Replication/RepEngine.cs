@@ -1,4 +1,5 @@
 ﻿using Interface_ReplicarDatos.Replication.Models;
+using Interface_ReplicarDatos.Replication.Services;
 using SAPbobsCOM;
 using System;
 using System.Collections.Generic;
@@ -22,7 +23,7 @@ namespace Interface_ReplicarDatos.Replication
         }
 
         /// <summary>
-        /// Ejecuta todas las reglas activas de OCRD configuradas en @REP_CFG.
+        /// Ejecuta todas las reglas activas de OCRD configuradas en @GNA_REP_CFG.
         /// </summary>
         public void RunOcrdReplication()
         {
@@ -30,8 +31,11 @@ namespace Interface_ReplicarDatos.Replication
 
             try
             {
-                // PHXA (PMX_TEST) es la base madre donde viven @REP_CFG y @REP_FMAP
+                // PHXA (PMX_TEST) es la base madre donde viven @GNA_REP_CFG y @GNA_REP_FMAP
                 cfgCmp = _factory.Connect("PHXA");
+
+                // 0) Infraestructura necesaria
+                //InfraInstaller.InstallInCompany(cfgCmp);
 
                 // 1) Cargar mapeos de campos
                 FieldMappingService.LoadAll(cfgCmp);

@@ -20,12 +20,12 @@ namespace Interface_ReplicarDatos.Replication
                                ""U_SrcDB"",""U_DstDB"",""U_Table"",
                                ""U_FilterSQL"",""U_ExcludeCSV"",""U_AssignJSON"",""U_Active"",
                                ""U_RepBPType"",""U_UseBPProperty"",""U_BPPropertyCode""
-                        FROM ""@REP_CFG""
+                        FROM ""@GNA_REP_CFG""
                         WHERE ""U_Active"" = 'Y'";
 
             if (!string.IsNullOrWhiteSpace(tableFilter))
             {
-                sql += $" AND \"U_Table\" = '{tableFilter}'";
+                sql += $@" AND ""U_Table"" = '{tableFilter}'";
             }
 
             rs.DoQuery(sql);

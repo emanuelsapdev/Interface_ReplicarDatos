@@ -1,4 +1,5 @@
 ﻿using Interface_ReplicarDatos.Replication.Models;
+using Interface_ReplicarDatos.Replication.Services;
 using SAPbobsCOM;
 using System;
 using System.Collections.Generic;
@@ -30,9 +31,6 @@ namespace Interface_ReplicarDatos.Replication
 
                 // Recordset origen
                 var rs = (Recordset)src.GetBusinessObject(BoObjectTypes.BoRecordset);
-
-                int lastIntTime = CheckpointService.ToIntTime(cp.LastTime);
-
                 string sql = $@"
                             SELECT ""CardCode"",""CardName"",""CardType"",""GroupCode"",""GroupNum"",
                                    ""Phone1"",""Phone2"",""E_Mail"",""VatGroup"",""frozenFor"",
@@ -41,7 +39,7 @@ namespace Interface_ReplicarDatos.Replication
                             FROM ""OCRD""
                             WHERE 
                              (""UpdateDate"" > '{cp.LastDate:yyyy-MM-dd}'
-                              OR (""UpdateDate"" = '{cp.LastDate:yyyy-MM-dd}' AND ""UpdateTS"" > {lastIntTime}))";
+                              OR (""UpdateDate"" = '{cp.LastDate:yyyy-MM-dd}' AND ""UpdateTS"" > {cp.LastTime}))";
 
                 if (!string.IsNullOrWhiteSpace(rule.FilterSQL))
                 {
@@ -64,16 +62,9 @@ namespace Interface_ReplicarDatos.Replication
                     string phone2 = rs.Fields.Item("Phone2").Value.ToString();
                     string email = rs.Fields.Item("E_Mail").Value.ToString();
                     string vatGroup = rs.Fields.Item("VatGroup").Value.ToString();
+                    string groupCode = rs.Fields.Item("GroupCode").Value.ToString();
                     string frozen = rs.Fields.Item("frozenFor").Value.ToString();
                     string uRep = rs.Fields.Item("U_Replicate").Value.ToString();
-
-                    int groupCodeSrc = 0;
-
-                    object rawGroupCode = rs.Fields.Item("GroupCode").Value;
-                    if (rawGroupCode != null && !(rawGroupCode is DBNull))
-                    {
-                        groupCodeSrc = Convert.ToInt32(rawGroupCode);
-                    }
 
                     // 1) Filtros lógicos según regla (tipo BP)
                     if (!PassesBpTypeFilter(rule, cardType))
@@ -93,14 +84,10 @@ namespace Interface_ReplicarDatos.Replication
                             continue;
                         }
                     }
-
-                    // 3) Mapear campos con REPFMAP (ej. VatGroup distinto por base)
-                    vatGroup = FieldMappingService.Apply(rule.SrcDB, rule.DstDB, "OCRD", "VatGroup", vatGroup);
-
-                    // 4) Asignaciones forzadas via AssignJSON (ej. GroupCode fijo por base)
-                    int groupCodeDst = rule.AssignOrDefault("OCRD.GroupCode", groupCodeSrc);
+                    
 
                     bool exists = bp.GetByKey(cardCode);
+
                     if (!exists)
                     {
                         bp.CardCode = cardCode;
@@ -113,26 +100,21 @@ namespace Interface_ReplicarDatos.Replication
                     RuleHelpers.SetIfAllowed(() => bp.Phone1 = phone1, "OCRD.Phone1", rule);
                     RuleHelpers.SetIfAllowed(() => bp.Phone2 = phone2, "OCRD.Phone2", rule);
                     RuleHelpers.SetIfAllowed(() => bp.EmailAddress = email, "OCRD.E_Mail", rule);
+                    RuleHelpers.SetIfAllowed(() => bp.Frozen = (frozen == "Y") ? BoYesNoEnum.tYES : BoYesNoEnum.tNO, "OCRD.frozenFor", rule); // Congelado (FrozenFor)
 
-                    // GroupCode (agrupación de clientes/proveedores)
-                    RuleHelpers.SetIfAllowed(() => bp.GroupCode = groupCodeDst, "OCRD.GroupCode", rule);
+                    #region SETEAR VALORES SEGUN MAPPING DESDE TABLA "GNA_REP_FMAP"
 
-                    // Condición de IVA (ya mapeada)
-                    RuleHelpers.SetIfAllowed(() => bp.VatGroup = vatGroup, "OCRD.VatGroup", rule);
+                        vatGroup = FieldMappingService.Apply(rule.SrcDB, rule.DstDB, "OCRD", "VatGroup", vatGroup);
+                        RuleHelpers.SetIfAllowed(() => bp.VatGroup = vatGroup, "OCRD.VatGroup", rule);  // Condición de IVA
 
-                    // Congelado (FrozenFor)
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        bp.Frozen = (frozen == "Y") ? BoYesNoEnum.tYES : BoYesNoEnum.tNO;
-                    }, "OCRD.frozenFor", rule);
+                        groupCode = FieldMappingService.Apply(rule.SrcDB, rule.DstDB, "OCRD", "GroupCode", groupCode);
+                        RuleHelpers.SetIfAllowed(() => bp.GroupCode = int.Parse(groupCode), "OCRD.GroupCode", rule);  // Grupo de Business partner
+
+                    #endregion
 
                     // Add / Update
                     int ret = exists ? bp.Update() : bp.Add();
-                    if(ret != 0)
-                    {
-                        
-                    }
-
+                    
                     LogService.HandleDiApiResult(src, dst, ret, rule.Code, "OCRD", cardCode);
 
                     // 5) Actualizar checkpoint con la fila actual
@@ -145,7 +127,8 @@ namespace Interface_ReplicarDatos.Replication
                     dst.EndTransaction(BoWfTransOpt.wf_Commit);
 
                 // Guardar checkpoint final
-                CheckpointService.PersistCheckpoint(dst, rule.Code, cp);
+                
+                CheckpointService.PersistCheckpoint(src, rule.Code, cp);
 
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(bp);

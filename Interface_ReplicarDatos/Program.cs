@@ -29,7 +29,6 @@ IHost host = Host.CreateDefaultBuilder(args)
 
         // Agrego los servicios
         services.AddSingleton<IRepEngine, RepEngine>();
-        services.AddSingleton<IInfraInstaller, InfraInstaller>();
         services.AddSingleton<IDiApiConnectionFactory, DiApiConnectionFactory>();
 
         // Agrego el Job de Sync
