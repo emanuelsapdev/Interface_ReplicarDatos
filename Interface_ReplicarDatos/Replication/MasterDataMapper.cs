@@ -50,7 +50,7 @@ namespace Interface_ReplicarDatos.Replication
 
                 // 1) Obtener descripción en ORIGEN
                 string q1 = $@"
-                                SELECT ""{descField}""
+                                SELECT {descField}
                                 FROM ""{table}""
                                 WHERE ""{codeField}"" = '{srcCode}' {extensionWhereSQL}";
                 rsSrc.DoQuery(q1);
@@ -65,7 +65,7 @@ namespace Interface_ReplicarDatos.Replication
                 string q2 = $@"
                                 SELECT ""{codeField}""
                                 FROM ""{table}""
-                                WHERE ""{descField}"" = '{desc}' {extensionWhereSQL}";
+                                WHERE {descField} = '{desc}' {extensionWhereSQL}";
                 rsDst.DoQuery(q2);
 
                 if (rsDst.EoF) return null;
