@@ -10,7 +10,7 @@ namespace Interface_ReplicarDatos.Replication.Services
 { 
     public static class LogService
     {
-        public static void WriteLog(Company src, string ruleCode, string table, string key, string status, string detail)
+        public static void WriteLog(Company src, string ruleCode, string table, string key, string status, string detail, string excludeKey)
         {
             var rs = (Recordset)src.GetBusinessObject(BoObjectTypes.BoRecordset);
             try
@@ -21,14 +21,15 @@ namespace Interface_ReplicarDatos.Replication.Services
                 key = (key ?? "").Replace("'", "''");
                 status = (status ?? "").Replace("'", "''");
                 detail = (detail ?? "").Replace("'", "''");
+                excludeKey = (excludeKey ?? "").Replace("'", "''");
 
                 string code = $"{DateTime.Now:FFFFFFF}";
 
                 string sql = $@"
                 INSERT INTO ""@GNA_REP_LOG""
-                    (""Code"",""Name"",""U_Rule"",""U_Table"",""U_Key"",""U_Status"",""U_Detail"", ""U_LogDate"", ""U_LogTime"")
+                    (""Code"",""Name"",""U_Rule"",""U_Table"",""U_Key"",""U_Status"",""U_Detail"", ""U_ExcludeKey"",""U_LogDate"", ""U_LogTime"")
                 VALUES
-                    ('{code}','{code}', '{ruleCode}', '{table}', '{key}', '{status}', '{detail}', '{DateTime.Now:yyyy-MM-dd}', '{DateTime.Now:HHmmss}')";
+                    ('{code}','{code}', '{ruleCode}', '{table}', '{key}', '{status}', '{detail}', '{excludeKey}','{DateTime.Now:yyyy-MM-dd}', '{DateTime.Now:HHmmss}')";
 
                 rs.DoQuery(sql);
             }
@@ -42,12 +43,12 @@ namespace Interface_ReplicarDatos.Replication.Services
         {
             if (retCode == 0)
             {
-                WriteLog(src, ruleCode, table, key, "OK", "");
+                WriteLog(src, ruleCode, table, key, "OK", "", "");
             }
             else
             {
                 dst.GetLastError(out int code, out string msg);
-                WriteLog(src, ruleCode, table, key, "ERROR", $"{code} - {msg}");
+                WriteLog(src, ruleCode, table, key, "ERROR", $"{code} - {msg}", "");
             }
         }
     }

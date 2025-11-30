@@ -10,7 +10,7 @@ public class InfraInstaller
         CreateUDT(cmp, "@GNA_REP_CFG", "GNA_REP_CFG", BoUTBTableType.bott_NoObject);
         CreateUDT(cmp, "@GNA_REP_CHECK", "GNA_REP_CHECK", BoUTBTableType.bott_NoObject);
         CreateUDT(cmp, "@GNA_REP_LOG", "GNA_REP_LOG", BoUTBTableType.bott_NoObject);
-        CreateUDT(cmp, "@GNA_REP_FMAP", "GNA_REP_FIELD_MAP", BoUTBTableType.bott_NoObject);
+        //CreateUDT(cmp, "@GNA_REP_FMAP", "GNA_REP_FIELD_MAP", BoUTBTableType.bott_NoObject);
 
         // ----- @GNA_REP_CFG -----
         CreateUDF(cmp, "@GNA_REP_CFG", "U_SrcDB", "Source DB", BoFieldTypes.db_Alpha, 50);
@@ -37,17 +37,18 @@ public class InfraInstaller
         CreateUDF(cmp, "@GNA_REP_LOG", "U_Key", "Key", BoFieldTypes.db_Alpha, 100);
         CreateUDF(cmp, "@GNA_REP_LOG", "U_Status", "Status", BoFieldTypes.db_Alpha, 20);
         CreateUDF(cmp, "@GNA_REP_LOG", "U_Detail", "Detail", BoFieldTypes.db_Memo, 254);
+        CreateUDF(cmp, "@GNA_REP_LOG", "U_ExcludeKey", "ExcludeKey", BoFieldTypes.db_Alpha, 50);
         CreateUDF(cmp, "@GNA_REP_LOG", "U_LogDate", "LogDate", BoFieldTypes.db_Date);
         CreateUDF(cmp, "@GNA_REP_LOG", "U_LogTime", "LogTime", BoFieldTypes.db_Alpha, 8);
 
         // ----- @GNA_REP_FMAP ----- (mapeo de valores por base)
-        CreateUDF(cmp, "@GNA_REP_FMAP", "U_FromDB", "From DB", BoFieldTypes.db_Alpha, 50);
-        CreateUDF(cmp, "@GNA_REP_FMAP", "U_ToDB", "To DB", BoFieldTypes.db_Alpha, 50);
-        CreateUDF(cmp, "@GNA_REP_FMAP", "U_Table", "Table", BoFieldTypes.db_Alpha, 20);
-        CreateUDF(cmp, "@GNA_REP_FMAP", "U_Field", "Field", BoFieldTypes.db_Alpha, 50);
-        CreateUDF(cmp, "@GNA_REP_FMAP", "U_SourceVal", "Source Value", BoFieldTypes.db_Alpha, 100);
-        CreateUDF(cmp, "@GNA_REP_FMAP", "U_TargetVal", "Target Value", BoFieldTypes.db_Alpha, 100);
-        CreateUDF(cmp, "@GNA_REP_FMAP", "U_Fixed", "Fixed (Y/N)", BoFieldTypes.db_Alpha, 1);
+        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_FromDB", "From DB", BoFieldTypes.db_Alpha, 50);
+        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_ToDB", "To DB", BoFieldTypes.db_Alpha, 50);
+        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_Table", "Table", BoFieldTypes.db_Alpha, 20);
+        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_Field", "Field", BoFieldTypes.db_Alpha, 50);
+        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_SourceVal", "Source Value", BoFieldTypes.db_Alpha, 100);
+        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_TargetVal", "Target Value", BoFieldTypes.db_Alpha, 100);
+        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_Fixed", "Fixed (Y/N)", BoFieldTypes.db_Alpha, 1);
 
         // ----- UDF en OCRD para marcar replicación -----
         CreateUDF(cmp, "OCRD", "U_Replicate", "Replicar (Y/N)", BoFieldTypes.db_Alpha, 1);

@@ -50,7 +50,7 @@ namespace Interface_ReplicarDatos.Replication
 
                 // 1) Obtener descripción en ORIGEN
                 string q1 = $@"
-                                SELECT {descField}
+                                SELECT {descField} AS ""Desc""
                                 FROM ""{table}""
                                 WHERE ""{codeField}"" = '{srcCode}' {extensionWhereSQL}";
                 rsSrc.DoQuery(q1);
@@ -58,7 +58,7 @@ namespace Interface_ReplicarDatos.Replication
                 if (rsSrc.EoF)
                     return null;
 
-                string desc = rsSrc.Fields.Item(descField).Value.ToString();
+                string desc = rsSrc.Fields.Item(0).Value.ToString();
                 desc = desc.Replace("'", "''");
                 srcDesc = desc;
                 // 2) Buscar ese texto en la base DESTINO
@@ -70,7 +70,7 @@ namespace Interface_ReplicarDatos.Replication
 
                 if (rsDst.EoF) return null;
 
-                string val = Convert.ToString(rsDst.Fields.Item(codeField).Value);
+                string val = Convert.ToString(rsDst.Fields.Item(0).Value);
                 return val;
             }
             finally

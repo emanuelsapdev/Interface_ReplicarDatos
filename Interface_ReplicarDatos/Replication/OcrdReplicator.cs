@@ -34,7 +34,7 @@ namespace Interface_ReplicarDatos.Replication
                 // Recordset origen
                 var rs = (Recordset)src.GetBusinessObject(BoObjectTypes.BoRecordset);
                 string sql = $@"
-                            SELECT 
+                            SELECT TOP 1
                             ""CardCode"",
                             ""U_Replicate"",
                             ""UpdateDate"",
@@ -94,60 +94,63 @@ namespace Interface_ReplicarDatos.Replication
 
                     #region SETTERS DE DATOS - CABECERA
 
-                    // Nombre del socio de negocios
-                    RuleHelpers.SetIfAllowed(() => bpDst.CardName = bpSrc.CardName, "OCRD.CardName", rule);
-
-                    // Nombre Extranjero del socio de negocios
-                    RuleHelpers.SetIfAllowed(() => bpDst.CardForeignName = bpSrc.CardForeignName, "OCRD.CardFName", rule);
-
-                    // Grupo de Cliente / Proveedor
                     RuleHelpers.SetIfAllowed(() =>
                     {
-                        string? dstGroupCode = MasterDataMapper.MapByDescription(src, dst, table: "OCRG", codeField: "GroupCode", descField: "GroupName", srcCode: bpSrc.GroupCode.ToString(), "", out string? srcGroupName);
-                        if (dstGroupCode == null)
+                        // Nombre del socio de negocios
+                        RuleHelpers.SetIfAllowed(() => bpDst.CardName = bpSrc.CardName, "OCRD.CardName", rule);
+
+                        // Nombre Extranjero del socio de negocios
+                        RuleHelpers.SetIfAllowed(() => bpDst.CardForeignName = bpSrc.CardForeignName, "OCRD.CardFName", rule);
+
+                        // Grupo de Cliente / Proveedor
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcGroupName))
+                            string? dstGroupCode = MasterDataMapper.MapByDescription(src, dst, table: "OCRG", codeField: "GroupCode", descField: @"""GroupName""", srcCode: bpSrc.GroupCode.ToString(), "", out string? srcGroupName);
+                            if (dstGroupCode == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Grupo de Socio de Negocios '{srcGroupName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                if (!string.IsNullOrEmpty(srcGroupName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Grupo de Socio de Negocios '{srcGroupName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.GroupCode");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.GroupCode = int.Parse(dstGroupCode);
+                            bpDst.GroupCode = int.Parse(dstGroupCode);
 
-                    }, "OCRD.GroupCode", rule);
+                        }, "OCRD.GroupCode", rule);
 
-                    // Moneda
-                    RuleHelpers.SetIfAllowed(() => bpDst.Currency = bpSrc.Currency, "OCRD.Currency", rule);
+                        // Moneda
+                        RuleHelpers.SetIfAllowed(() => bpDst.Currency = bpSrc.Currency, "OCRD.Currency", rule);
 
-                    // Tipo Indicador fiscal
-                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_FiscIdType").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_FiscIdType").Value, "OCRD.U_B1SYS_FiscIdType", rule);
+                        // Tipo Indicador fiscal
+                        RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_FiscIdType").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_FiscIdType").Value, "OCRD.U_B1SYS_FiscIdType", rule);
 
-                    // Identificación fiscal
-                    RuleHelpers.SetIfAllowed(() => bpDst.FederalTaxID = bpSrc.FederalTaxID, "OCRD.LicTradNum", rule);
+                        // Identificación fiscal
+                        RuleHelpers.SetIfAllowed(() => bpDst.FederalTaxID = bpSrc.FederalTaxID, "OCRD.LicTradNum", rule);
 
+                    }, "OCRD.HEADER", rule);
 
                     #endregion
 
-
                     #region SETTERS DE DATOS - SOLAPA GENERAL
+                    RuleHelpers.SetIfAllowed(() =>
+                    {
+                        // Teléfono 1
+                        RuleHelpers.SetIfAllowed(() => bpDst.Phone1 = bpSrc.Phone1, "OCRD.Phone1", rule);
 
-                    // Teléfono 1
-                    RuleHelpers.SetIfAllowed(() => bpDst.Phone1 = bpSrc.Phone1, "OCRD.Phone1", rule); 
-                    
                     // Teléfono 2
-                    RuleHelpers.SetIfAllowed(() => bpDst.Phone2 = bpSrc.Phone2, "OCRD.Phone2", rule); 
-                    
+                    RuleHelpers.SetIfAllowed(() => bpDst.Phone2 = bpSrc.Phone2, "OCRD.Phone2", rule);
+
                     // Celular
-                    RuleHelpers.SetIfAllowed(() => bpDst.Cellular = bpSrc.Cellular, "OCRD.Cellular", rule); 
-                    
+                    RuleHelpers.SetIfAllowed(() => bpDst.Cellular = bpSrc.Cellular, "OCRD.Cellular", rule);
+
                     // Fax
-                    RuleHelpers.SetIfAllowed(() => bpDst.Fax = bpSrc.Fax, "OCRD.Fax", rule);    
-                    
+                    RuleHelpers.SetIfAllowed(() => bpDst.Fax = bpSrc.Fax, "OCRD.Fax", rule);
+
                     // Correo electrónico
-                    RuleHelpers.SetIfAllowed(() => bpDst.EmailAddress = bpSrc.EmailAddress, "OCRD.E_Mail", rule); 
-                    
+                    RuleHelpers.SetIfAllowed(() => bpDst.EmailAddress = bpSrc.EmailAddress, "OCRD.E_Mail", rule);
+
                     // Sitio web
-                    RuleHelpers.SetIfAllowed(() => bpDst.Website = bpSrc.Website, "OCRD.IntrntSite", rule); 
+                    RuleHelpers.SetIfAllowed(() => bpDst.Website = bpSrc.Website, "OCRD.IntrntSite", rule);
 
                     // Forma de envío
                     RuleHelpers.SetIfAllowed(() =>
@@ -157,7 +160,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(bpSrc.ShippingType.ToString()))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Tipo de Envío '{srcShipType}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Tipo de Envío '{srcShipType}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ShipType");
                             }
                             return;
                         }
@@ -172,7 +175,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcIndicator))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Indicador '{srcIndicator}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Indicador '{srcIndicator}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.Indicator");
                             }
                             return;
                         }
@@ -191,7 +194,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcProjectName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Proyecto de Socio de Negocios '{srcProjectName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Proyecto de Socio de Negocios '{srcProjectName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ProjectCod");
                             }
                             return;
                         }
@@ -206,7 +209,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcIndustryName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Industria de Socio de Negocios '{srcIndustryName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Industria de Socio de Negocios '{srcIndustryName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.IndustryC");
                             }
                             return;
                         }
@@ -227,7 +230,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcContactPerson))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Persona de Contacto '{srcContactPerson}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Persona de Contacto '{srcContactPerson}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.CntctPrsn");
                             }
                             return;
                         }
@@ -252,7 +255,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcSlpName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Encargado de Venta/Compra '{srcSlpName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Encargado de Venta/Compra '{srcSlpName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.SlpCode");
                             }
                             return;
                         }
@@ -269,7 +272,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcAgentName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Agente '{srcAgentName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Agente '{srcAgentName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.AgentCode");
                             }
                             return;
                         }
@@ -285,12 +288,12 @@ namespace Interface_ReplicarDatos.Replication
                     RuleHelpers.SetIfAllowed(() =>
                     {
                         string? dstTechnicalCode = MasterDataMapper.MapByDescription(src, dst, table: "OHEM", codeField: "empID", descField: @"""firstName"" || ""lastName""", srcCode: bpSrc.DefaultTechnician.ToString(), "", out string? srcTechnicalName);
-                        
+
                         if (dstTechnicalCode == null)
                         {
                             if (!string.IsNullOrEmpty(srcTechnicalName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Técnico '{srcTechnicalName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Técnico '{srcTechnicalName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.DfTcnician");
                             }
                             return;
                         }
@@ -307,7 +310,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcTerritoryName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Territorio de Socio de Negocios '{srcTerritoryName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Territorio de Socio de Negocios '{srcTerritoryName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.Territory");
                             }
                             return;
                         }
@@ -323,7 +326,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcLangName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Lenguaje de Socio de Negocios '{srcLangName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Lenguaje de Socio de Negocios '{srcLangName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.LngCode");
                             }
                             return;
                         }
@@ -345,14 +348,169 @@ namespace Interface_ReplicarDatos.Replication
                     RuleHelpers.SetIfAllowed(() => bpDst.FrozenFrom = bpSrc.FrozenFrom, "OCRD.frozenFrom", rule);
                     RuleHelpers.SetIfAllowed(() => bpDst.FrozenTo = bpSrc.FrozenTo, "OCRD.frozenTo", rule);
                     RuleHelpers.SetIfAllowed(() => bpDst.FrozenRemarks = bpSrc.FrozenRemarks, "OCRD.FrozenComm", rule);
+                    }, "OCRD.FLAP1", rule);
+                    #endregion
+
+                    #region SETTERS DE DATOS - SOLAPA PERSONAS DE CONTACTO
+
+                    for (int i = 0; i < bpSrc.ContactEmployees.Count; i++)
+                    {
+                        bpSrc.ContactEmployees.SetCurrentLine(i);
+                        var srcContact = bpSrc.ContactEmployees;
+                        // Buscar si el contacto ya existe en el destino
+                        var dstContact = bpDst.ContactEmployees;
+                        bool contactExists = false;
+                        for (int j = 0; j < dstContact.Count; j++)
+                        {
+                            dstContact.SetCurrentLine(j);
+                            var existingContact = dstContact;
+                            if (existingContact.Name == srcContact.Name)
+                            {
+                                // Actualizar contacto existente
+                                contactExists = true;
+                                RuleHelpers.SetIfAllowed(() => existingContact.FirstName = srcContact.FirstName, "OCRD.OCPR.FirstName", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.MiddleName = srcContact.MiddleName, "OCRD.OCPR.MiddleName", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.LastName = srcContact.LastName, "OCRD.OCPR.LastName", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Title = srcContact.Title, "OCRD.OCPR.Title", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Position = srcContact.Position, "OCRD.OCPR.Position", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Address = srcContact.Address, "OCRD.OCPR.Address", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Phone1 = srcContact.Phone1, "OCRD.OCPR.Tel1", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Phone2 = srcContact.Phone2, "OCRD.OCPR.Tel2", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.MobilePhone = srcContact.MobilePhone, "OCRD.OCPR.Cellolar", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Fax = srcContact.Fax, "OCRD.OCPR.Fax", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.E_Mail = srcContact.E_Mail, "OCRD.OCPR.E_MailL", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.EmailGroupCode = srcContact.EmailGroupCode, "OCRD.OCPR.E_MailL", rule);
+                                RuleHelpers.SetIfAllowed(() =>
+                                {
+                                    string? dstEmailGroupCode = MasterDataMapper.MapByDescription(src, dst, table: "OEGP", codeField: "EmlGrpCode", descField: @"""EmlGrpName""", srcCode: srcContact.EmailGroupCode, "", out string? srcEmlGrpName);
+                                    if (dstEmailGroupCode == null)
+                                    {
+                                        if (!string.IsNullOrEmpty(srcEmlGrpName))
+                                        {
+                                            LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Grupo de Correo electronico '{srcEmlGrpName}' (CardCode: {bpSrc.CardCode} - Contact: {srcContact.Name}). Se omite la asignación.", "OCRD.OCPR.EmlGrpCode");
+                                        }
+                                        return;
+                                    }
+                                    existingContact.EmailGroupCode = dstEmailGroupCode;
+
+                                }, "OCRD.OCPR.EmlGrpCode", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Pager = srcContact.Pager, "OCRD.OCPR.Pager", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Remarks1 = srcContact.Remarks1, "OCRD.OCPR.Notes1", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Remarks2 = srcContact.Remarks2, "OCRD.OCPR.Notes2", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Password = srcContact.Password, "OCRD.OCPR.Password", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.PlaceOfBirth = srcContact.PlaceOfBirth, "OCRD.OCPR.BirthPlace", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.DateOfBirth = srcContact.DateOfBirth, "OCRD.OCPR.BirthDate", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Profession = srcContact.Profession, "OCRD.OCPR.Profession", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.CityOfBirth = srcContact.CityOfBirth, "OCRD.OCPR.BirthCity", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.BlockSendingMarketingContent = srcContact.BlockSendingMarketingContent, "OCRD.OCPR.BlockComm", rule);
+                                RuleHelpers.SetIfAllowed(() => existingContact.Active = srcContact.Active, "OCRD.OCPR.Active", rule);
+
+                                break;
+                            }
+                        }
+                        if (!contactExists)
+                        {
+                            // Agregar nuevo contacto
+                            dstContact.Name = srcContact.Name;
+                            RuleHelpers.SetIfAllowed(() => dstContact.FirstName = srcContact.FirstName, "OCRD.OCPR.FirstName", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.MiddleName = srcContact.MiddleName, "OCRD.OCPR.MiddleName", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.LastName = srcContact.LastName, "OCRD.OCPR.LastName", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Title = srcContact.Title, "OCRD.OCPR.Title", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Position = srcContact.Position, "OCRD.OCPR.Position", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Address = srcContact.Address, "OCRD.OCPR.Address", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Phone1 = srcContact.Phone1, "OCRD.OCPR.Tel1", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Phone2 = srcContact.Phone2, "OCRD.OCPR.Tel2", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.MobilePhone = srcContact.MobilePhone, "OCRD.OCPR.Cellolar", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Fax = srcContact.Fax, "OCRD.OCPR.Fax", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.E_Mail = srcContact.E_Mail, "OCRD.OCPR.E_MailL", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.EmailGroupCode = srcContact.EmailGroupCode, "OCRD.OCPR.E_MailL", rule);
+                            RuleHelpers.SetIfAllowed(() =>
+                            {
+                                string? dstEmailGroupCode = MasterDataMapper.MapByDescription(src, dst, table: "OEGP", codeField: "EmlGrpCode", descField: @"""EmlGrpName""", srcCode: srcContact.EmailGroupCode, "", out string? srcEmlGrpName);
+                                if (dstEmailGroupCode == null)
+                                {
+                                    if (!string.IsNullOrEmpty(srcEmlGrpName))
+                                    {
+                                        LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Grupo de Correo electronico '{srcEmlGrpName}' (CardCode: {bpSrc.CardCode} - Contact: {srcContact.Name}). Se omite la asignación.", "OCRD.OCPR.EmlGrpCode");
+                                    }
+                                    return;
+                                }
+                                dstContact.EmailGroupCode = dstEmailGroupCode;
+
+                            }, "OCRD.OCPR.EmlGrpCode", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Pager = srcContact.Pager, "OCRD.OCPR.Pager", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Remarks1 = srcContact.Remarks1, "OCRD.OCPR.Notes1", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Remarks2 = srcContact.Remarks2, "OCRD.OCPR.Notes2", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Password = srcContact.Password, "OCRD.OCPR.Password", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.PlaceOfBirth = srcContact.PlaceOfBirth, "OCRD.OCPR.BirthPlace", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.DateOfBirth = srcContact.DateOfBirth, "OCRD.OCPR.BirthDate", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Profession = srcContact.Profession, "OCRD.OCPR.Profession", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.CityOfBirth = srcContact.CityOfBirth, "OCRD.OCPR.BirthCity", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.BlockSendingMarketingContent = srcContact.BlockSendingMarketingContent, "OCRD.OCPR.BlockComm", rule);
+                            RuleHelpers.SetIfAllowed(() => dstContact.Active = srcContact.Active, "OCRD.OCPR.Active", rule);
+
+                            dstContact.Add();
+                        }
+                    }
 
                     #endregion
 
-                    #region SETTERS DE DATOS - SOLAPA PERSONAS DE CONTACTO ??????????????????
+                    #region SETTERS DE DATOS - SOLAPA DIRECCIONES 
 
-                    #endregion
+                    for (int i = 0; i < bpSrc.Addresses.Count; i++)
+                    {
+                        bpSrc.Addresses.SetCurrentLine(i);
+                        var srcAddress = bpSrc.Addresses;
+                        // Buscar si la dirección ya existe en el destino
+                        var dstAddress = bpDst.Addresses;
+                        bool addressExists = false;
+                        for (int j = 0; j < dstAddress.Count; j++)
+                        {
+                            dstAddress.SetCurrentLine(j);
+                            var existingAddress = dstAddress;
+                            if (existingAddress.AddressName == srcAddress.AddressName)
+                            {
+                                // Actualizar dirección existente
+                                addressExists = true;
 
-                    #region SETTERS DE DATOS - SOLAPA DIRECCIONES ??????????????????
+                                RuleHelpers.SetIfAllowed(() => existingAddress.AddressName2 = srcAddress.AddressName2, "OCRD.CRD1.Address2", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.AddressName3 = srcAddress.AddressName3, "OCRD.CRD1.Address3", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.Street = srcAddress.Street, "OCRD.CRD1.Street", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.Block = srcAddress.Block, "OCRD.CRD1.Block", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.City = srcAddress.City, "OCRD.CRD1.City", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.ZipCode = srcAddress.ZipCode, "OCRD.CRD1.ZipCode", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.County = srcAddress.County, "OCRD.CRD1.County", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.State = srcAddress.State, "OCRD.CRD1.State", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.Country = srcAddress.Country, "OCRD.CRD1.Country", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.Country = srcAddress.Country, "OCRD.CRD1.TaxCode", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.StreetNo = srcAddress.StreetNo, "OCRD.CRD1.StreetNo", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.BuildingFloorRoom = srcAddress.BuildingFloorRoom, "OCRD.CRD1.Building", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.TaxOffice = srcAddress.TaxOffice, "OCRD.CRD1.TaxOffice", rule);
+                                RuleHelpers.SetIfAllowed(() => existingAddress.GlobalLocationNumber = srcAddress.GlobalLocationNumber, "OCRD.CRD1.GlblLocNum", rule);
+
+                                break;
+                            }
+                        }
+                        if (!addressExists)
+                        {
+                            // Agregar nueva dirección
+                            dstAddress.AddressName = srcAddress.AddressName;
+                            RuleHelpers.SetIfAllowed(() => dstAddress.AddressName2 = srcAddress.AddressName2, "OCRD.CRD1.Address2", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.AddressName3 = srcAddress.AddressName3, "OCRD.CRD1.Address3", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.Street = srcAddress.Street, "OCRD.CRD1.Street", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.Block = srcAddress.Block, "OCRD.CRD1.Block", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.City = srcAddress.City, "OCRD.CRD1.City", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.ZipCode = srcAddress.ZipCode, "OCRD.CRD1.ZipCode", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.County = srcAddress.County, "OCRD.CRD1.County", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.State = srcAddress.State, "OCRD.CRD1.State", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.Country = srcAddress.Country, "OCRD.CRD1.Country", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.Country = srcAddress.Country, "OCRD.CRD1.TaxCode", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.StreetNo = srcAddress.StreetNo, "OCRD.CRD1.StreetNo", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.BuildingFloorRoom = srcAddress.BuildingFloorRoom, "OCRD.CRD1.Building", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.TaxOffice = srcAddress.TaxOffice, "OCRD.CRD1.TaxOffice", rule);
+                            RuleHelpers.SetIfAllowed(() => dstAddress.GlobalLocationNumber = srcAddress.GlobalLocationNumber, "OCRD.CRD1.GlblLocNum", rule);
+                        }
+                    }
 
                     #endregion
 
@@ -366,7 +524,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcPymntGroup))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Condición de Pago '{srcPymntGroup}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Condición de Pago '{srcPymntGroup}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.GroupNum");
                             }
                             return;
                         }
@@ -385,7 +543,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcListName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Lista de Precios '{srcListName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Lista de Precios '{srcListName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ListNum");
                             }
                             return;
                         }
@@ -407,7 +565,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcTermName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Plazo de Reclamaciones '{srcTermName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Plazo de Reclamaciones '{srcTermName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.DunTerm");
                             }
                             return;
                         }
@@ -429,7 +587,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcCreditCardName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Clase de tarjeta crédito '{srcCreditCardName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Clase de tarjeta crédito '{srcCreditCardName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.CreditCard");
                             }
                             return;
                         }
@@ -457,7 +615,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcPrioDesc))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Prioridad '{srcPrioDesc}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Prioridad '{srcPrioDesc}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.Priority");
                             }
                             return;
                         }
@@ -468,11 +626,8 @@ namespace Interface_ReplicarDatos.Replication
                     // IBAN estándar
                     RuleHelpers.SetIfAllowed(() => bpDst.IBAN = bpSrc.IBAN, "OCRD.IBAN", rule);
 
-                    // Feriados ??????????????????????????
-                    //RuleHelpers.SetIfAllowed(() => bpDst.hl = bpSrc.Holidays, "OCRD.HldCode", rule);
-
-                    // Fechas de pago ??????????????????????????
-                    //RuleHelpers.SetIfAllowed(() => bpDst.BPPaymentDates.PaymentDate = bpSrc.BPPaymentDates.PaymentDate, "OCRD.AvarageLate", rule);
+                    // Fechas de pago
+                    RuleHelpers.SetIfAllowed(() => bpDst.BPPaymentDates.PaymentDate = bpSrc.BPPaymentDates.PaymentDate, "OCRD.BPPaymentDates", rule);
 
                     // Permitir entrega parcial del pedido
                     RuleHelpers.SetIfAllowed(() => bpDst.PartialDelivery = bpSrc.PartialDelivery, "OCRD.PartDelivr", rule);
@@ -497,7 +652,6 @@ namespace Interface_ReplicarDatos.Replication
 
                     #endregion
 
-
                     #region  SETTERS DE DATOS - SOLAPA EJECUCIÓN DE PAGO
 
                     // País/Región
@@ -511,7 +665,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcBankName))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Banco '{srcBankName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Banco '{srcBankName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.HouseBank");
                             }
                             return;
                         }
@@ -528,7 +682,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcHouseBankAccount))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Cuenta bancaria '{srcHouseBankAccount}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Cuenta bancaria '{srcHouseBankAccount}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.HousBnkAct");
                             }
                             return;
                         }
@@ -559,7 +713,7 @@ namespace Interface_ReplicarDatos.Replication
                         {
                             if (!string.IsNullOrEmpty(srcBankChargesAllocationCode))
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Código de imputación de los gastos bancarios '{srcBankChargesAllocationCode}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.");
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Código de imputación de los gastos bancarios '{srcBankChargesAllocationCode}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.BCACode");
                             }
                             return;
                         }
@@ -572,23 +726,133 @@ namespace Interface_ReplicarDatos.Replication
 
                     #endregion
 
+                    #region  SETTERS DE DATOS - SOLAPA FINANZAS
+                    
 
+                    #region GENERAL
+                    // Socio comercial de consolidación
+                    RuleHelpers.SetIfAllowed(() =>
+                    {
+                        string? dstFatherCard = MasterDataMapper.MapByDescription(src, dst, table: "OCRD", codeField: "CardCode", descField: @"""CardName""", srcCode: bpSrc.FatherCard, "", out string? srcFatherName);
 
+                        if (dstFatherCard == null)
+                        {
+                            if (!string.IsNullOrEmpty(srcFatherName))
+                            {
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Socio comercial de consolidación '{srcFatherName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.BCACode");
+                            }
+                            return;
+                        }
+                        bpDst.FatherCard = dstFatherCard;
 
+                    }, "OCRD.BCACode", rule);
 
+                    // Consolidación de pagos / Consolidaci&ón de entregas
+                    RuleHelpers.SetIfAllowed(() => bpDst.FatherType = bpSrc.FatherType, "OCRD.FatherType", rule);
 
-                    #region OTROS CAMPOS
+                    // Bloquear reclamaciones
+                    RuleHelpers.SetIfAllowed(() => bpDst.BlockDunning = bpSrc.BlockDunning, "OCRD.BlockDunn", rule);
+
+                    // Proveedor conectado
+                    RuleHelpers.SetIfAllowed(() =>
+                    {
+                        string? dstLinkBp = MasterDataMapper.MapByDescription(src, dst, table: "OCRD", codeField: "CardCode", descField: @"""CardName""", srcCode: bpSrc.LinkedBusinessPartner, "", out string? srcLinkBpName);
+
+                        if (dstLinkBp == null)
+                        {
+                            if (!string.IsNullOrEmpty(srcLinkBpName))
+                            {
+                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Socio comercial de consolidación '{srcLinkBpName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ConnBP");
+                            }
+                            return;
+                        }
+                        bpDst.LinkedBusinessPartner = dstLinkBp;
+
+                    }, "OCRD.ConnBP", rule);
+
+                    // Grupo de planificación
+                    RuleHelpers.SetIfAllowed(() => bpDst.PlanningGroup = bpSrc.PlanningGroup, "OCRD.PlngGroup", rule);
+
+                    // Utilizar cuenta de mercancías enviadas
+                    RuleHelpers.SetIfAllowed(() => bpDst.UseShippedGoodsAccount = bpSrc.UseShippedGoodsAccount, "OCRD.UseShpdGd", rule);
+
+                    // Empresa asociada
+                    RuleHelpers.SetIfAllowed(() => bpDst.Affiliate = bpSrc.Affiliate, "OCRD.Affiliate", rule);
+
+                    #endregion
+
+                    #region IMPUESTO
+
+                    // Obligat. / Extranjero
+                    RuleHelpers.SetIfAllowed(() => bpDst.VatLiable = bpSrc.VatLiable, "OCRD.VatStatus", rule);
+
+                    // Sujeto a retención
+                    RuleHelpers.SetIfAllowed(() => bpDst.SubjectToWithholdingTax = bpSrc.SubjectToWithholdingTax, "OCRD.WTLiable", rule);
+
+                    // ID de ingresos brutos
+                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_GrsIncId").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_GrsIncId").Value, "OCRD.U_B1SYS_GrsIncId", rule);
+
+                    // Categoría de ingresos brutos
+                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_GrsIncCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_GrsIncCtg").Value, "OCRD.U_B1SYS_GrsIncCtg", rule);
+
+                    // Categoría de IVA
                     RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_VATCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_VATCtg").Value, "OCRD.U_B1SYS_VATCtg", rule);
-                    RuleHelpers.SetIfAllowed(() => bpDst.VatGroup = bpSrc.VatGroup, "OCRD.VatGroup", rule);
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
+
+                    // Categoría de impuesto a las ganancias
+                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_IncTaxCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_IncTaxCtg").Value, "OCRD.U_B1SYS_IncTaxCtg", rule);
+
+                    // Estado de Reproweb
+                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_ReproWebSta").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_ReproWebSta").Value, "OCRD.U_B1SYS_ReproWebSta", rule);
+
+                    // Participación accionaria en otras empresas
+                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_ShareFromO").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_ShareFromO").Value, "OCRD.U_B1SYS_ShareFromO", rule);
+
+                    // Empresario
+                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_Employer").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_Employer").Value, "OCRD.U_B1SYS_Employer", rule);
+
+                    // Actividad de monotributo
+                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_MonoAct").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_MonoAct").Value, "OCRD.U_B1SYS_MonoAct", rule);
+
+                    // Categoría de monotributo
+                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_MonoCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_MonoCtg").Value, "OCRD.U_B1SYS_MonoCtg", rule);
+
+                    // Número EORI
+                    RuleHelpers.SetIfAllowed(() => bpDst.EORINumber = bpSrc.EORINumber, "OCRD.EORINumber", rule);
+
+
+                    #endregion
+
+                    #endregion
+
+                    #region SETTERS DE DATOS - SOLAPA PROPIEDADES
+
+                    // Nombre de la propiedad
+                    for (int i = 1; i <= 64; i++)
+                    {
+                        string fieldName = $"QryGroup{i}";
+                        RuleHelpers.SetIfAllowed(() => bpDst.Properties[i] = bpSrc.Properties[i], $"OCRD.{fieldName}", rule);
+                    }
+
+                    #endregion
+
+                    #region SETTERS DE DATOS - SOLAPA COMENTARIOS
+
+                    // Comentario
+                    RuleHelpers.SetIfAllowed(() => bpDst.FreeText = bpSrc.FreeText, "OCRD.Free_Text", rule);
+
+                    #endregion
+
+                    #region SETTERS DE DATOS - SOLAPA DOCUMENTOS ELECTRÓNICOS
+
+                    // Relevante para FCE
+                    RuleHelpers.SetIfAllowed(() => bpDst.FCERelevant = bpSrc.FCERelevant, "OCRD.FCERelevnt", rule);
+
+                    // Validar documentos de entrega base para mes de contabilización e integridad
+                    RuleHelpers.SetIfAllowed(() => bpDst.FCEValidateBaseDelivery = bpSrc.FCEValidateBaseDelivery, "OCRD.FCEVldte", rule);
+
+                    // Utilizar FCEs como medios de pago
+                    RuleHelpers.SetIfAllowed(() => bpDst.FCEAsPaymentMeans = bpSrc.FCEAsPaymentMeans, "OCRD.FCEPmnMean", rule);
+
                     #endregion
 
 
@@ -614,6 +878,10 @@ namespace Interface_ReplicarDatos.Replication
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(bpSrc);
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(bpDst);
             }
+            //catch (Exception ex)
+            //{
+            //    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: null, "WARNING", $"Error: {ex.Message}");
+            //}
             finally
             {
                 factory.Disconnect(dst);
