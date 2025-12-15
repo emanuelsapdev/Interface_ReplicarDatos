@@ -19,10 +19,8 @@ namespace Interface_ReplicarDatos.Replication.Models
         public string AssignJSON { get; set; }    // JSON { "OCRD.GroupCode": "800" }
         public bool Active { get; set; }
 
-        // Del audio / diseño:
-        public string RepBPType { get; set; }     // P=Prov, C=Cli, B=Ambos
-        public bool UseBPProperty { get; set; }   // Y/N
-        public string BPPropertyCode { get; set; }// nombre flag/UDF, ej. U_Replicate
+        public bool UseRepProperty { get; set; }   // Y/N
+        public string RepPropertyCode { get; set; }// nombre flag/UDF, ej. U_Replicate
 
         private string[] _excludeFields;
         public string[] ExcludeFields

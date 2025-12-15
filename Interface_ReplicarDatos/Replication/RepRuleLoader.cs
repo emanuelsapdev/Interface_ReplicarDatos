@@ -18,8 +18,8 @@ namespace Interface_ReplicarDatos.Replication
             string sql = @"
                         SELECT ""Code"",
                                ""U_SrcDB"",""U_DstDB"",""U_Table"",
-                               ""U_FilterSQL"",""U_ExcludeCSV"",""U_AssignJSON"",""U_Active"",
-                               ""U_RepBPType"",""U_UseBPProperty"",""U_BPPropertyCode""
+                               ""U_FilterSQL"",""U_ExcludeCSV"",""U_Active"",
+                               ""U_UseRepProperty"",""U_RepPropertyCode""
                         FROM ""@GNA_REP_CFG""
                         WHERE ""U_Active"" = 'Y'";
 
@@ -40,11 +40,9 @@ namespace Interface_ReplicarDatos.Replication
                     Table = rs.Fields.Item("U_Table").Value.ToString(),
                     FilterSQL = rs.Fields.Item("U_FilterSQL").Value.ToString(),
                     ExcludeCSV = rs.Fields.Item("U_ExcludeCSV").Value.ToString(),
-                    AssignJSON = rs.Fields.Item("U_AssignJSON").Value.ToString(),
                     Active = rs.Fields.Item("U_Active").Value.ToString() == "Y",
-                    RepBPType = rs.Fields.Item("U_RepBPType").Value.ToString(),
-                    UseBPProperty = rs.Fields.Item("U_UseBPProperty").Value.ToString() == "Y",
-                    BPPropertyCode = rs.Fields.Item("U_BPPropertyCode").Value.ToString()
+                    UseRepProperty = rs.Fields.Item("U_UseRepProperty").Value.ToString() == "Y",
+                    RepPropertyCode = rs.Fields.Item("U_RepPropertyCode").Value.ToString()
                 };
 
                 rules.Add(r);

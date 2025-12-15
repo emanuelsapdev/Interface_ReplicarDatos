@@ -49,6 +49,7 @@ namespace Interface_ReplicarDatos.Replication.Services
             {
                 dst.GetLastError(out int code, out string msg);
                 WriteLog(src, ruleCode, table, key, "ERROR", $"{code} - {msg}", "");
+
             }
         }
     }

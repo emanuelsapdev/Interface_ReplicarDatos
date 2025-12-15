@@ -10,7 +10,6 @@ public class InfraInstaller
         CreateUDT(cmp, "@GNA_REP_CFG", "GNA_REP_CFG", BoUTBTableType.bott_NoObject);
         CreateUDT(cmp, "@GNA_REP_CHECK", "GNA_REP_CHECK", BoUTBTableType.bott_NoObject);
         CreateUDT(cmp, "@GNA_REP_LOG", "GNA_REP_LOG", BoUTBTableType.bott_NoObject);
-        //CreateUDT(cmp, "@GNA_REP_FMAP", "GNA_REP_FIELD_MAP", BoUTBTableType.bott_NoObject);
 
         // ----- @GNA_REP_CFG -----
         CreateUDF(cmp, "@GNA_REP_CFG", "U_SrcDB", "Source DB", BoFieldTypes.db_Alpha, 50);
@@ -18,13 +17,9 @@ public class InfraInstaller
         CreateUDF(cmp, "@GNA_REP_CFG", "U_Table", "Table", BoFieldTypes.db_Alpha, 20);
         CreateUDF(cmp, "@GNA_REP_CFG", "U_FilterSQL", "Filter SQL", BoFieldTypes.db_Memo, 254);
         CreateUDF(cmp, "@GNA_REP_CFG", "U_ExcludeCSV", "Exclude Fields", BoFieldTypes.db_Memo, 254);
-        CreateUDF(cmp, "@GNA_REP_CFG", "U_AssignJSON", "Assign JSON", BoFieldTypes.db_Memo, 254);
         CreateUDF(cmp, "@GNA_REP_CFG", "U_Active", "Active (Y/N)", BoFieldTypes.db_Alpha, 1);
-
-        // Campos específicos del audio (tipo BP y marca de propiedad)
-        CreateUDF(cmp, "@GNA_REP_CFG", "U_RepBPType", "BP Type (P/C/B)", BoFieldTypes.db_Alpha, 1);   // P=Prov, C=Cli, B=Ambos
-        CreateUDF(cmp, "@GNA_REP_CFG", "U_UseBPProperty", "Use BP Flag", BoFieldTypes.db_Alpha, 1);   // Y/N
-        CreateUDF(cmp, "@GNA_REP_CFG", "U_BPPropertyCode", "BP Flag Code", BoFieldTypes.db_Alpha, 20);  // ej: P01 o U_Replicate
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_UseRepProperty", "Use Flag", BoFieldTypes.db_Alpha, 1);   // Y/N
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_RepRepPropertyCode", "Flag Code", BoFieldTypes.db_Alpha, 20);  // ej: P01 o U_Replicate
 
         // ----- @GNA_REP_CHECK -----
         CreateUDF(cmp, "@GNA_REP_CHECK", "U_RuleCode", "Rule Code", BoFieldTypes.db_Alpha, 50);
@@ -41,17 +36,9 @@ public class InfraInstaller
         CreateUDF(cmp, "@GNA_REP_LOG", "U_LogDate", "LogDate", BoFieldTypes.db_Date);
         CreateUDF(cmp, "@GNA_REP_LOG", "U_LogTime", "LogTime", BoFieldTypes.db_Alpha, 8);
 
-        // ----- @GNA_REP_FMAP ----- (mapeo de valores por base)
-        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_FromDB", "From DB", BoFieldTypes.db_Alpha, 50);
-        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_ToDB", "To DB", BoFieldTypes.db_Alpha, 50);
-        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_Table", "Table", BoFieldTypes.db_Alpha, 20);
-        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_Field", "Field", BoFieldTypes.db_Alpha, 50);
-        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_SourceVal", "Source Value", BoFieldTypes.db_Alpha, 100);
-        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_TargetVal", "Target Value", BoFieldTypes.db_Alpha, 100);
-        //CreateUDF(cmp, "@GNA_REP_FMAP", "U_Fixed", "Fixed (Y/N)", BoFieldTypes.db_Alpha, 1);
-
         // ----- UDF en OCRD para marcar replicación -----
         CreateUDF(cmp, "OCRD", "U_Replicate", "Replicar (Y/N)", BoFieldTypes.db_Alpha, 1);
+        CreateUDF(cmp, "OITM", "U_Replicate", "Replicar (Y/N)", BoFieldTypes.db_Alpha, 1);
     }
 
     // ========== Helpers privados ==========
@@ -71,25 +58,25 @@ public class InfraInstaller
                 ut.TableType = type;
 
                 int ret = ut.Add();
-                if (ret != 0)
-                {
-                    c.GetLastError(out int code, out string msg);
-                    // -2035 = ya existe → lo ignoramos
-                    if (code != -2035)
-                        throw new Exception($"Error creando UDT {tableName}: {code} - {msg}");
-                }
+                //if (ret != 0)
+                //{
+                //    c.GetLastError(out int code, out string msg);
+                //    // -2035 = ya existe → lo ignoramos
+                //    if (code != -2035)
+                //        throw new Exception($"Error creando UDT {tableName}: {code} - {msg}");
+                //}
             }
         }
-        catch { throw; }
-        finally
-        {
-            Marshal.ReleaseComObject(ut);
-        }
+        catch {}
     }
 
     private static void CreateUDF(Company c, string tableName, string alias, string desc,
                            BoFieldTypes type,  int size = 0, BoFldSubTypes subType = BoFldSubTypes.st_None)
     {
+        if (FieldExists(c,tableName, alias))
+            return;
+
+
         var uf = (UserFieldsMD)c.GetBusinessObject(BoObjectTypes.oUserFields);
         try
         {
@@ -103,20 +90,32 @@ public class InfraInstaller
                 uf.EditSize = size;
 
             int ret = uf.Add();
-            if (ret != 0)
-            {
-                c.GetLastError(out int code, out string msg);
-                // -2035 = UDF ya existe → lo ignoramos
-                if (code != -2035)
-                {
-                    throw new Exception($"Error creando UDF {alias} en {tableName}: {code} - {msg}");
-                }
-            }
+            //if (ret != 0)
+            //{
+            //    c.GetLastError(out int code, out string msg);
+            //    // -2035 = UDF ya existe → lo ignoramos
+            //    if (code != -2035)
+            //    {
+            //        throw new Exception($"Error creando UDF {alias} en {tableName}: {code} - {msg}");
+            //    }
+            //}
         }
-        catch { throw; }
         finally
         {
             Marshal.ReleaseComObject(uf);
         }
+    }
+    private static bool FieldExists(Company c,string tableName, string fieldName)
+    {
+        var rs = (Recordset)c.GetBusinessObject(BoObjectTypes.BoRecordset);
+        rs.DoQuery($@"
+            SELECT 1 
+              FROM CUFD 
+             WHERE ""TableID"" = '{tableName.Replace("'", "''")}'
+               AND ""AliasID"" = '{fieldName.Replace("'", "''")}'");
+
+        bool exists = !rs.EoF;
+        System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
+        return exists;
     }
 }

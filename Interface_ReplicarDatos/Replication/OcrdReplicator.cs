@@ -34,7 +34,7 @@ namespace Interface_ReplicarDatos.Replication
                 // Recordset origen
                 var rs = (Recordset)src.GetBusinessObject(BoObjectTypes.BoRecordset);
                 string sql = $@"
-                            SELECT TOP 1
+                            SELECT
                             ""CardCode"",
                             ""U_Replicate"",
                             ""UpdateDate"",
@@ -50,9 +50,6 @@ namespace Interface_ReplicarDatos.Replication
 
                 rs.DoQuery(sql);
 
-                if (!dst.InTransaction)
-                    dst.StartTransaction();
-
                 var bpSrc = (BusinessPartners)src.GetBusinessObject(BoObjectTypes.oBusinessPartners);
 
                 var bpDst = (BusinessPartners)dst.GetBusinessObject(BoObjectTypes.oBusinessPartners);
@@ -63,26 +60,21 @@ namespace Interface_ReplicarDatos.Replication
                     string cardCode = rs.Fields.Item("CardCode").Value.ToString();
                     bpSrc.GetByKey(cardCode); // cargar BP origen si es necesario
 
-                    // 1) Filtros lógicos según regla (tipo BP)
-                    if (!PassesBpTypeFilter(rule, bpSrc.CardType))
-                    {
-                        rs.MoveNext();
-                        continue;
-                    }
-
                     // 2) Filtro por flag de replicación (U_Replicate o similar) según regla
-                    if (rule.UseBPProperty && !string.IsNullOrWhiteSpace(rule.BPPropertyCode))
+                    if (rule.UseRepProperty && !string.IsNullOrWhiteSpace(rule.RepPropertyCode))
                     {
                         // Para simplificar, usamos U_Replicate (ya traído).
-                        // Si BPPropertyCode fuera otra cosa, se puede extender aquí.
+                        // Si BPRepPropertyCode fuera otra cosa, se puede extender aquí.
                         bool isReplicated = bpSrc.UserFields.Fields.Item("U_Replicate").Value == "Y";
-                        if (rule.BPPropertyCode == "U_Replicate" && !isReplicated)
+                        if (rule.RepPropertyCode == "U_Replicate" && !isReplicated)
                         {
                             rs.MoveNext();
                             continue;
                         }
                     }
 
+                    if (!dst.InTransaction)
+                        dst.StartTransaction();
 
                     bool existsBp = bpDst.GetByKey(cardCode);
 
@@ -137,249 +129,294 @@ namespace Interface_ReplicarDatos.Replication
                         // Teléfono 1
                         RuleHelpers.SetIfAllowed(() => bpDst.Phone1 = bpSrc.Phone1, "OCRD.Phone1", rule);
 
-                    // Teléfono 2
-                    RuleHelpers.SetIfAllowed(() => bpDst.Phone2 = bpSrc.Phone2, "OCRD.Phone2", rule);
+                        // Teléfono 2
+                        RuleHelpers.SetIfAllowed(() => bpDst.Phone2 = bpSrc.Phone2, "OCRD.Phone2", rule);
 
-                    // Celular
-                    RuleHelpers.SetIfAllowed(() => bpDst.Cellular = bpSrc.Cellular, "OCRD.Cellular", rule);
+                        // Celular
+                        RuleHelpers.SetIfAllowed(() => bpDst.Cellular = bpSrc.Cellular, "OCRD.Cellular", rule);
 
-                    // Fax
-                    RuleHelpers.SetIfAllowed(() => bpDst.Fax = bpSrc.Fax, "OCRD.Fax", rule);
+                        // Fax
+                        RuleHelpers.SetIfAllowed(() => bpDst.Fax = bpSrc.Fax, "OCRD.Fax", rule);
 
-                    // Correo electrónico
-                    RuleHelpers.SetIfAllowed(() => bpDst.EmailAddress = bpSrc.EmailAddress, "OCRD.E_Mail", rule);
+                        // Correo electrónico
+                        RuleHelpers.SetIfAllowed(() => bpDst.EmailAddress = bpSrc.EmailAddress, "OCRD.E_Mail", rule);
 
-                    // Sitio web
-                    RuleHelpers.SetIfAllowed(() => bpDst.Website = bpSrc.Website, "OCRD.IntrntSite", rule);
+                        // Sitio web
+                        RuleHelpers.SetIfAllowed(() => bpDst.Website = bpSrc.Website, "OCRD.IntrntSite", rule);
 
-                    // Forma de envío
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstShipType = MasterDataMapper.MapByDescription(src, dst, table: "OSHP", codeField: "TrnspCode", descField: @"""TrnspName""", srcCode: bpSrc.ShippingType.ToString(), "", out string? srcShipType);
-                        if (dstShipType == null)
+                        // Forma de envío
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(bpSrc.ShippingType.ToString()))
+                            string? dstShipType = MasterDataMapper.MapByDescription(src, dst, table: "OSHP", codeField: "TrnspCode", descField: @"""TrnspName""", srcCode: bpSrc.ShippingType.ToString(), extensionWhereSQL: string.Empty, out string? srcShipType);
+                            if (dstShipType == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Tipo de Envío '{srcShipType}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ShipType");
+                                if (!string.IsNullOrEmpty(bpSrc.ShippingType.ToString()))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Tipo de Envío '{srcShipType}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ShipType");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.ShippingType = int.Parse(dstShipType);
-                    }, "OCRD.ShipType", rule);
+                            bpDst.ShippingType = int.Parse(dstShipType);
+                        }, "OCRD.ShipType", rule);
 
-                    // Indicador de factoring
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstIndicator = MasterDataMapper.MapByDescription(src, dst, table: "OIDC", codeField: "Code", descField: @"""Name""", srcCode: bpSrc.Indicator, "", out string? srcIndicator);
-                        if (dstIndicator == null)
+                        // Indicador de factoring
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcIndicator))
+                            string? dstIndicator = MasterDataMapper.MapByDescription(src, dst, table: "OIDC", codeField: "Code", descField: @"""Name""", srcCode: bpSrc.Indicator, "", out string? srcIndicator);
+                            if (dstIndicator == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Indicador '{srcIndicator}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.Indicator");
+                                if (!string.IsNullOrEmpty(srcIndicator))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Indicador '{srcIndicator}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.Indicator");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.Indicator = dstIndicator;
+                            bpDst.Indicator = dstIndicator;
 
-                    }, "OCRD.Indicator", rule);
+                        }, "OCRD.Indicator", rule);
 
-                    // Clave de acceso
-                    RuleHelpers.SetIfAllowed(() => bpDst.Password = bpSrc.Password, "OCRD.Password", rule);
+                        // Clave de acceso
+                        RuleHelpers.SetIfAllowed(() => bpDst.Password = bpSrc.Password, "OCRD.Password", rule);
 
-                    // Proyecto de socio de negocios
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstProjectCode = MasterDataMapper.MapByDescription(src, dst, table: "OPRJ", codeField: "PrjCode", descField: @"""PrjName""", srcCode: bpSrc.ProjectCode, "", out string? srcProjectName);
-                        if (dstProjectCode == null)
+                        // Proyecto de socio de negocios
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcProjectName))
+                            string? dstProjectCode = MasterDataMapper.MapByDescription(src, dst, table: "OPRJ", codeField: "PrjCode", descField: @"""PrjName""", srcCode: bpSrc.ProjectCode, "", out string? srcProjectName);
+                            if (dstProjectCode == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Proyecto de Socio de Negocios '{srcProjectName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ProjectCod");
+                                if (!string.IsNullOrEmpty(srcProjectName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Proyecto de Socio de Negocios '{srcProjectName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ProjectCod");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.ProjectCode = dstProjectCode;
-                    }, "OCRD.ProjectCod", rule);
+                            bpDst.ProjectCode = dstProjectCode;
+                        }, "OCRD.ProjectCod", rule);
 
-                    // Industria
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstIndustryCode = MasterDataMapper.MapByDescription(src, dst, table: "OOND", codeField: "IndCode", descField: @"""IndName""", srcCode: bpSrc.Industry.ToString(), "", out string? srcIndustryName);
-                        if (dstIndustryCode == null)
+                        // Industria
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcIndustryName))
+                            string? dstIndustryCode = MasterDataMapper.MapByDescription(src, dst, table: "OOND", codeField: "IndCode", descField: @"""IndName""", srcCode: bpSrc.Industry.ToString(), "", out string? srcIndustryName);
+                            if (dstIndustryCode == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Industria de Socio de Negocios '{srcIndustryName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.IndustryC");
+                                if (!string.IsNullOrEmpty(srcIndustryName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Industria de Socio de Negocios '{srcIndustryName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.IndustryC");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.Industry = int.Parse(dstIndustryCode);
-                    }, "OCRD.IndustryC", rule);
+                            bpDst.Industry = int.Parse(dstIndustryCode);
+                        }, "OCRD.IndustryC", rule);
 
-                    // Tipo de operación comercial
-                    RuleHelpers.SetIfAllowed(() => bpDst.CompanyPrivate = bpSrc.CompanyPrivate, "OCRD.CmpPrivate", rule);
+                        // Tipo de operación comercial
+                        RuleHelpers.SetIfAllowed(() => bpDst.CompanyPrivate = bpSrc.CompanyPrivate, "OCRD.CmpPrivate", rule);
 
-                    // Nombre alias
-                    RuleHelpers.SetIfAllowed(() => bpDst.AliasName = bpSrc.AliasName, "OCRD.AliasName", rule);
+                        // Nombre alias
+                        RuleHelpers.SetIfAllowed(() => bpDst.AliasName = bpSrc.AliasName, "OCRD.AliasName", rule);
 
-                    // Persona de contacto predeterminada
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstContactPerson = MasterDataMapper.MapByDescription(src, dst, table: "OCPR", codeField: "Name", descField: @"""Name""", srcCode: bpSrc.ContactPerson, extensionWhereSQL: @$"""CardCode"" = '{bpSrc.CardCode}'", out string? srcContactPerson);
-                        if (dstContactPerson == null)
+                        // Persona de contacto predeterminada
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcContactPerson))
+                            string? dstContactPerson = MasterDataMapper.MapByDescription(src, dst, table: "OCPR", codeField: "Name", descField: @"""Name""", srcCode: bpSrc.ContactPerson, extensionWhereSQL: @$"""CardCode"" = '{bpSrc.CardCode}'", out string? srcContactPerson);
+                            if (dstContactPerson == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Persona de Contacto '{srcContactPerson}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.CntctPrsn");
+                                if (!string.IsNullOrEmpty(srcContactPerson))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Persona de Contacto '{srcContactPerson}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.CntctPrsn");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.ContactPerson = dstContactPerson;
+                            bpDst.ContactPerson = dstContactPerson;
 
-                    }, "OCRD.CntctPrsn", rule);
+                        }, "OCRD.CntctPrsn", rule);
 
-                    // ID número 2
-                    RuleHelpers.SetIfAllowed(() => bpDst.AdditionalID = bpSrc.AdditionalID, "OCRD.AddID", rule);
+                        // ID número 2
+                        RuleHelpers.SetIfAllowed(() => bpDst.AdditionalID = bpSrc.AdditionalID, "OCRD.AddID", rule);
 
-                    // ID fiscal federal unificado
-                    RuleHelpers.SetIfAllowed(() => bpDst.VatIDNum = bpSrc.VatIDNum, "OCRD.VatIdUnCmp", rule);
+                        // ID fiscal federal unificado
+                        RuleHelpers.SetIfAllowed(() => bpDst.VatIDNum = bpSrc.VatIDNum, "OCRD.VatIdUnCmp", rule);
 
-                    // Comentarios
-                    RuleHelpers.SetIfAllowed(() => bpDst.Notes = bpSrc.Notes, "OCRD.Notes", rule);
+                        // Comentarios
+                        RuleHelpers.SetIfAllowed(() => bpDst.Notes = bpSrc.Notes, "OCRD.Notes", rule);
 
-                    // Empleado del dpto.de ventas
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstSlpCode = MasterDataMapper.MapByDescription(src, dst, table: "OSLP", codeField: "SlpCode", descField: @"""SlpName""", srcCode: bpSrc.SalesPersonCode.ToString(), "", out string? srcSlpName);
-                        if (dstSlpCode == null)
+                        // Empleado del dpto.de ventas
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcSlpName))
+                            string? dstSlpCode = MasterDataMapper.MapByDescription(src, dst, table: "OSLP", codeField: "SlpCode", descField: @"""SlpName""", srcCode: bpSrc.SalesPersonCode.ToString(), "", out string? srcSlpName);
+                            if (dstSlpCode == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Encargado de Venta/Compra '{srcSlpName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.SlpCode");
+                                if (!string.IsNullOrEmpty(srcSlpName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Encargado de Venta/Compra '{srcSlpName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.SlpCode");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.SalesPersonCode = int.Parse(dstSlpCode);
+                            bpDst.SalesPersonCode = int.Parse(dstSlpCode);
 
-                    }, "OCRD.SlpCode", rule);
+                        }, "OCRD.SlpCode", rule);
 
-                    // Responsable
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstAgentCode = MasterDataMapper.MapByDescription(src, dst, table: "OAGP", codeField: "AgentCode", descField: @"""AgentName""", srcCode: bpSrc.AgentCode.ToString(), "", out string? srcAgentName);
-
-                        if (dstAgentCode == null)
+                        // Responsable
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcAgentName))
+                            string? dstAgentCode = MasterDataMapper.MapByDescription(src, dst, table: "OAGP", codeField: "AgentCode", descField: @"""AgentName""", srcCode: bpSrc.AgentCode.ToString(), "", out string? srcAgentName);
+
+                            if (dstAgentCode == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Agente '{srcAgentName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.AgentCode");
+                                if (!string.IsNullOrEmpty(srcAgentName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Agente '{srcAgentName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.AgentCode");
+                                }
+                                return;
                             }
-                            return;
-                        }
 
-                        bpDst.AgentCode = dstAgentCode;
+                            bpDst.AgentCode = dstAgentCode;
 
-                    }, "OCRD.AgentCode", rule);
+                        }, "OCRD.AgentCode", rule);
 
-                    // Código canal SN
-                    RuleHelpers.SetIfAllowed(() => bpDst.ChannelBP = bpSrc.ChannelBP, "OCRD.ChannlBP", rule);
+                        // Código canal SN
+                        RuleHelpers.SetIfAllowed(() => bpDst.ChannelBP = bpSrc.ChannelBP, "OCRD.ChannlBP", rule);
 
-                    // Técnico
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstTechnicalCode = MasterDataMapper.MapByDescription(src, dst, table: "OHEM", codeField: "empID", descField: @"""firstName"" || ""lastName""", srcCode: bpSrc.DefaultTechnician.ToString(), "", out string? srcTechnicalName);
-
-                        if (dstTechnicalCode == null)
+                        // Técnico
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcTechnicalName))
+                            string? dstTechnicalCode = MasterDataMapper.MapByDescription(src, dst, table: "OHEM", codeField: "empID", descField: @"""firstName"" || ""lastName""", srcCode: bpSrc.DefaultTechnician.ToString(), "", out string? srcTechnicalName);
+
+                            if (dstTechnicalCode == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Técnico '{srcTechnicalName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.DfTcnician");
+                                if (!string.IsNullOrEmpty(srcTechnicalName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Técnico '{srcTechnicalName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.DfTcnician");
+                                }
+                                return;
                             }
-                            return;
-                        }
 
-                        bpDst.DefaultTechnician = int.Parse(dstTechnicalCode);
+                            bpDst.DefaultTechnician = int.Parse(dstTechnicalCode);
 
-                    }, "OCRD.DfTcnician", rule);
+                        }, "OCRD.DfTcnician", rule);
 
-                    // Territorio
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstTerritoryID = MasterDataMapper.MapByDescription(src, dst, table: "OTER", codeField: "territryID", descField: @"""descript""", srcCode: bpSrc.Territory.ToString(), "", out string? srcTerritoryName);
-                        if (dstTerritoryID == null)
+                        // Territorio
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcTerritoryName))
+                            string? dstTerritoryID = MasterDataMapper.MapByDescription(src, dst, table: "OTER", codeField: "territryID", descField: @"""descript""", srcCode: bpSrc.Territory.ToString(), "", out string? srcTerritoryName);
+                            if (dstTerritoryID == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Territorio de Socio de Negocios '{srcTerritoryName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.Territory");
+                                if (!string.IsNullOrEmpty(srcTerritoryName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Territorio de Socio de Negocios '{srcTerritoryName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.Territory");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.Territory = int.Parse(dstTerritoryID);
+                            bpDst.Territory = int.Parse(dstTerritoryID);
 
-                    }, "OCRD.Territory", rule);
+                        }, "OCRD.Territory", rule);
 
-                    // Idioma
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstLangCode = MasterDataMapper.MapByDescription(src, dst, table: "OLNG", codeField: "Code", descField: @"""Name""", srcCode: bpSrc.LanguageCode.ToString(), "", out string? srcLangName);
-                        if (dstLangCode == null)
+                        // Idioma
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcLangName))
+                            string? dstLangCode = MasterDataMapper.MapByDescription(src, dst, table: "OLNG", codeField: "Code", descField: @"""Name""", srcCode: bpSrc.LanguageCode.ToString(), "", out string? srcLangName);
+                            if (dstLangCode == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Lenguaje de Socio de Negocios '{srcLangName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.LngCode");
+                                if (!string.IsNullOrEmpty(srcLangName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Lenguaje de Socio de Negocios '{srcLangName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.LngCode");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.LanguageCode = int.Parse(dstLangCode);
+                            bpDst.LanguageCode = int.Parse(dstLangCode);
 
-                    }, "OCRD.LngCode", rule);
+                        }, "OCRD.LngCode", rule);
 
-                    // GLN
-                    RuleHelpers.SetIfAllowed(() => bpDst.GlobalLocationNumber = bpSrc.GlobalLocationNumber, "OCRD.GlblLocNum", rule);
+                        // GLN
+                        RuleHelpers.SetIfAllowed(() => bpDst.GlobalLocationNumber = bpSrc.GlobalLocationNumber, "OCRD.GlblLocNum", rule);
 
-                    // Validez, Fechas y Comentarios de validez
-                    RuleHelpers.SetIfAllowed(() => bpDst.Valid = bpSrc.Valid, "OCRD.validFor", rule);
-                    RuleHelpers.SetIfAllowed(() => bpDst.ValidFrom = bpSrc.ValidFrom, "OCRD.validFrom", rule);
-                    RuleHelpers.SetIfAllowed(() => bpDst.ValidTo = bpSrc.ValidTo, "OCRD.validTo", rule);
-                    RuleHelpers.SetIfAllowed(() => bpDst.ValidRemarks = bpSrc.ValidRemarks, "OCRD.ValidComm", rule);
+                        // Validez, Fechas y Comentarios de validez
+                        RuleHelpers.SetIfAllowed(() => bpDst.Valid = bpSrc.Valid, "OCRD.validFor", rule);
+                        RuleHelpers.SetIfAllowed(() => bpDst.ValidFrom = bpSrc.ValidFrom, "OCRD.validFrom", rule);
+                        RuleHelpers.SetIfAllowed(() => bpDst.ValidTo = bpSrc.ValidTo, "OCRD.validTo", rule);
+                        RuleHelpers.SetIfAllowed(() => bpDst.ValidRemarks = bpSrc.ValidRemarks, "OCRD.ValidComm", rule);
 
-                    // Congelamiento, Fechas y Comentarios de congelamiento
-                    RuleHelpers.SetIfAllowed(() => bpDst.Frozen = bpSrc.Frozen, "OCRD.frozenFor", rule);
-                    RuleHelpers.SetIfAllowed(() => bpDst.FrozenFrom = bpSrc.FrozenFrom, "OCRD.frozenFrom", rule);
-                    RuleHelpers.SetIfAllowed(() => bpDst.FrozenTo = bpSrc.FrozenTo, "OCRD.frozenTo", rule);
-                    RuleHelpers.SetIfAllowed(() => bpDst.FrozenRemarks = bpSrc.FrozenRemarks, "OCRD.FrozenComm", rule);
-                    }, "OCRD.FLAP1", rule);
+                        // Congelamiento, Fechas y Comentarios de congelamiento
+                        RuleHelpers.SetIfAllowed(() => bpDst.Frozen = bpSrc.Frozen, "OCRD.frozenFor", rule);
+                        RuleHelpers.SetIfAllowed(() => bpDst.FrozenFrom = bpSrc.FrozenFrom, "OCRD.frozenFrom", rule);
+                        RuleHelpers.SetIfAllowed(() => bpDst.FrozenTo = bpSrc.FrozenTo, "OCRD.frozenTo", rule);
+                        RuleHelpers.SetIfAllowed(() => bpDst.FrozenRemarks = bpSrc.FrozenRemarks, "OCRD.FrozenComm", rule);
+                    }, "OCRD.FLAP_GENERAL", rule);
                     #endregion
 
                     #region SETTERS DE DATOS - SOLAPA PERSONAS DE CONTACTO
-
-                    for (int i = 0; i < bpSrc.ContactEmployees.Count; i++)
+                    RuleHelpers.SetIfAllowed(() =>
                     {
-                        bpSrc.ContactEmployees.SetCurrentLine(i);
-                        var srcContact = bpSrc.ContactEmployees;
-                        // Buscar si el contacto ya existe en el destino
-                        var dstContact = bpDst.ContactEmployees;
-                        bool contactExists = false;
-                        for (int j = 0; j < dstContact.Count; j++)
+                        for (int i = 0; i < bpSrc.ContactEmployees.Count; i++)
                         {
-                            dstContact.SetCurrentLine(j);
-                            var existingContact = dstContact;
-                            if (existingContact.Name == srcContact.Name)
+                            bpSrc.ContactEmployees.SetCurrentLine(i);
+                            var srcContact = bpSrc.ContactEmployees;
+                            // Buscar si el contacto ya existe en el destino
+                            var dstContact = bpDst.ContactEmployees;
+                            bool contactExists = false;
+                            for (int j = 0; j < dstContact.Count; j++)
                             {
-                                // Actualizar contacto existente
-                                contactExists = true;
-                                RuleHelpers.SetIfAllowed(() => existingContact.FirstName = srcContact.FirstName, "OCRD.OCPR.FirstName", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.MiddleName = srcContact.MiddleName, "OCRD.OCPR.MiddleName", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.LastName = srcContact.LastName, "OCRD.OCPR.LastName", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Title = srcContact.Title, "OCRD.OCPR.Title", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Position = srcContact.Position, "OCRD.OCPR.Position", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Address = srcContact.Address, "OCRD.OCPR.Address", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Phone1 = srcContact.Phone1, "OCRD.OCPR.Tel1", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Phone2 = srcContact.Phone2, "OCRD.OCPR.Tel2", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.MobilePhone = srcContact.MobilePhone, "OCRD.OCPR.Cellolar", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Fax = srcContact.Fax, "OCRD.OCPR.Fax", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.E_Mail = srcContact.E_Mail, "OCRD.OCPR.E_MailL", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.EmailGroupCode = srcContact.EmailGroupCode, "OCRD.OCPR.E_MailL", rule);
+                                dstContact.SetCurrentLine(j);
+                                var existingContact = dstContact;
+                                if (existingContact.Name == srcContact.Name)
+                                {
+                                    // Actualizar contacto existente
+                                    contactExists = true;
+                                    RuleHelpers.SetIfAllowed(() => existingContact.FirstName = srcContact.FirstName, "OCRD.OCPR.FirstName", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.MiddleName = srcContact.MiddleName, "OCRD.OCPR.MiddleName", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.LastName = srcContact.LastName, "OCRD.OCPR.LastName", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Title = srcContact.Title, "OCRD.OCPR.Title", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Position = srcContact.Position, "OCRD.OCPR.Position", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Address = srcContact.Address, "OCRD.OCPR.Address", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Phone1 = srcContact.Phone1, "OCRD.OCPR.Tel1", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Phone2 = srcContact.Phone2, "OCRD.OCPR.Tel2", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.MobilePhone = srcContact.MobilePhone, "OCRD.OCPR.Cellolar", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Fax = srcContact.Fax, "OCRD.OCPR.Fax", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.E_Mail = srcContact.E_Mail, "OCRD.OCPR.E_MailL", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.EmailGroupCode = srcContact.EmailGroupCode, "OCRD.OCPR.E_MailL", rule);
+                                    RuleHelpers.SetIfAllowed(() =>
+                                    {
+                                        string? dstEmailGroupCode = MasterDataMapper.MapByDescription(src, dst, table: "OEGP", codeField: "EmlGrpCode", descField: @"""EmlGrpName""", srcCode: srcContact.EmailGroupCode, "", out string? srcEmlGrpName);
+                                        if (dstEmailGroupCode == null)
+                                        {
+                                            if (!string.IsNullOrEmpty(srcEmlGrpName))
+                                            {
+                                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Grupo de Correo electronico '{srcEmlGrpName}' (CardCode: {bpSrc.CardCode} - Contact: {srcContact.Name}). Se omite la asignación.", "OCRD.OCPR.EmlGrpCode");
+                                            }
+                                            return;
+                                        }
+                                        existingContact.EmailGroupCode = dstEmailGroupCode;
+
+                                    }, "OCRD.OCPR.EmlGrpCode", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Pager = srcContact.Pager, "OCRD.OCPR.Pager", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Remarks1 = srcContact.Remarks1, "OCRD.OCPR.Notes1", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Remarks2 = srcContact.Remarks2, "OCRD.OCPR.Notes2", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Password = srcContact.Password, "OCRD.OCPR.Password", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.PlaceOfBirth = srcContact.PlaceOfBirth, "OCRD.OCPR.BirthPlace", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.DateOfBirth = srcContact.DateOfBirth, "OCRD.OCPR.BirthDate", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Profession = srcContact.Profession, "OCRD.OCPR.Profession", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.CityOfBirth = srcContact.CityOfBirth, "OCRD.OCPR.BirthCity", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.BlockSendingMarketingContent = srcContact.BlockSendingMarketingContent, "OCRD.OCPR.BlockComm", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingContact.Active = srcContact.Active, "OCRD.OCPR.Active", rule);
+
+                                    break;
+                                }
+                            }
+                            if (!contactExists)
+                            {
+                                // Agregar nuevo contacto
+                                dstContact.Name = srcContact.Name;
+                                RuleHelpers.SetIfAllowed(() => dstContact.FirstName = srcContact.FirstName, "OCRD.OCPR.FirstName", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.MiddleName = srcContact.MiddleName, "OCRD.OCPR.MiddleName", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.LastName = srcContact.LastName, "OCRD.OCPR.LastName", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Title = srcContact.Title, "OCRD.OCPR.Title", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Position = srcContact.Position, "OCRD.OCPR.Position", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Address = srcContact.Address, "OCRD.OCPR.Address", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Phone1 = srcContact.Phone1, "OCRD.OCPR.Tel1", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Phone2 = srcContact.Phone2, "OCRD.OCPR.Tel2", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.MobilePhone = srcContact.MobilePhone, "OCRD.OCPR.Cellolar", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Fax = srcContact.Fax, "OCRD.OCPR.Fax", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.E_Mail = srcContact.E_Mail, "OCRD.OCPR.E_MailL", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.EmailGroupCode = srcContact.EmailGroupCode, "OCRD.OCPR.E_MailL", rule);
                                 RuleHelpers.SetIfAllowed(() =>
                                 {
                                     string? dstEmailGroupCode = MasterDataMapper.MapByDescription(src, dst, table: "OEGP", codeField: "EmlGrpCode", descField: @"""EmlGrpName""", srcCode: srcContact.EmailGroupCode, "", out string? srcEmlGrpName);
@@ -391,133 +428,91 @@ namespace Interface_ReplicarDatos.Replication
                                         }
                                         return;
                                     }
-                                    existingContact.EmailGroupCode = dstEmailGroupCode;
+                                    dstContact.EmailGroupCode = dstEmailGroupCode;
 
                                 }, "OCRD.OCPR.EmlGrpCode", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Pager = srcContact.Pager, "OCRD.OCPR.Pager", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Remarks1 = srcContact.Remarks1, "OCRD.OCPR.Notes1", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Remarks2 = srcContact.Remarks2, "OCRD.OCPR.Notes2", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Password = srcContact.Password, "OCRD.OCPR.Password", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.PlaceOfBirth = srcContact.PlaceOfBirth, "OCRD.OCPR.BirthPlace", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.DateOfBirth = srcContact.DateOfBirth, "OCRD.OCPR.BirthDate", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Profession = srcContact.Profession, "OCRD.OCPR.Profession", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.CityOfBirth = srcContact.CityOfBirth, "OCRD.OCPR.BirthCity", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.BlockSendingMarketingContent = srcContact.BlockSendingMarketingContent, "OCRD.OCPR.BlockComm", rule);
-                                RuleHelpers.SetIfAllowed(() => existingContact.Active = srcContact.Active, "OCRD.OCPR.Active", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Pager = srcContact.Pager, "OCRD.OCPR.Pager", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Remarks1 = srcContact.Remarks1, "OCRD.OCPR.Notes1", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Remarks2 = srcContact.Remarks2, "OCRD.OCPR.Notes2", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Password = srcContact.Password, "OCRD.OCPR.Password", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.PlaceOfBirth = srcContact.PlaceOfBirth, "OCRD.OCPR.BirthPlace", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.DateOfBirth = srcContact.DateOfBirth, "OCRD.OCPR.BirthDate", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Profession = srcContact.Profession, "OCRD.OCPR.Profession", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.CityOfBirth = srcContact.CityOfBirth, "OCRD.OCPR.BirthCity", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.BlockSendingMarketingContent = srcContact.BlockSendingMarketingContent, "OCRD.OCPR.BlockComm", rule);
+                                RuleHelpers.SetIfAllowed(() => dstContact.Active = srcContact.Active, "OCRD.OCPR.Active", rule);
 
-                                break;
+                                dstContact.Add();
                             }
                         }
-                        if (!contactExists)
-                        {
-                            // Agregar nuevo contacto
-                            dstContact.Name = srcContact.Name;
-                            RuleHelpers.SetIfAllowed(() => dstContact.FirstName = srcContact.FirstName, "OCRD.OCPR.FirstName", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.MiddleName = srcContact.MiddleName, "OCRD.OCPR.MiddleName", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.LastName = srcContact.LastName, "OCRD.OCPR.LastName", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Title = srcContact.Title, "OCRD.OCPR.Title", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Position = srcContact.Position, "OCRD.OCPR.Position", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Address = srcContact.Address, "OCRD.OCPR.Address", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Phone1 = srcContact.Phone1, "OCRD.OCPR.Tel1", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Phone2 = srcContact.Phone2, "OCRD.OCPR.Tel2", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.MobilePhone = srcContact.MobilePhone, "OCRD.OCPR.Cellolar", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Fax = srcContact.Fax, "OCRD.OCPR.Fax", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.E_Mail = srcContact.E_Mail, "OCRD.OCPR.E_MailL", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.EmailGroupCode = srcContact.EmailGroupCode, "OCRD.OCPR.E_MailL", rule);
-                            RuleHelpers.SetIfAllowed(() =>
-                            {
-                                string? dstEmailGroupCode = MasterDataMapper.MapByDescription(src, dst, table: "OEGP", codeField: "EmlGrpCode", descField: @"""EmlGrpName""", srcCode: srcContact.EmailGroupCode, "", out string? srcEmlGrpName);
-                                if (dstEmailGroupCode == null)
-                                {
-                                    if (!string.IsNullOrEmpty(srcEmlGrpName))
-                                    {
-                                        LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Grupo de Correo electronico '{srcEmlGrpName}' (CardCode: {bpSrc.CardCode} - Contact: {srcContact.Name}). Se omite la asignación.", "OCRD.OCPR.EmlGrpCode");
-                                    }
-                                    return;
-                                }
-                                dstContact.EmailGroupCode = dstEmailGroupCode;
-
-                            }, "OCRD.OCPR.EmlGrpCode", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Pager = srcContact.Pager, "OCRD.OCPR.Pager", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Remarks1 = srcContact.Remarks1, "OCRD.OCPR.Notes1", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Remarks2 = srcContact.Remarks2, "OCRD.OCPR.Notes2", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Password = srcContact.Password, "OCRD.OCPR.Password", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.PlaceOfBirth = srcContact.PlaceOfBirth, "OCRD.OCPR.BirthPlace", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.DateOfBirth = srcContact.DateOfBirth, "OCRD.OCPR.BirthDate", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Profession = srcContact.Profession, "OCRD.OCPR.Profession", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.CityOfBirth = srcContact.CityOfBirth, "OCRD.OCPR.BirthCity", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.BlockSendingMarketingContent = srcContact.BlockSendingMarketingContent, "OCRD.OCPR.BlockComm", rule);
-                            RuleHelpers.SetIfAllowed(() => dstContact.Active = srcContact.Active, "OCRD.OCPR.Active", rule);
-
-                            dstContact.Add();
-                        }
-                    }
-
+                    }, "OCRD.FLAP_CONTACTS", rule);
                     #endregion
 
                     #region SETTERS DE DATOS - SOLAPA DIRECCIONES 
-
-                    for (int i = 0; i < bpSrc.Addresses.Count; i++)
+                    RuleHelpers.SetIfAllowed(() =>
                     {
-                        bpSrc.Addresses.SetCurrentLine(i);
-                        var srcAddress = bpSrc.Addresses;
-                        // Buscar si la dirección ya existe en el destino
-                        var dstAddress = bpDst.Addresses;
-                        bool addressExists = false;
-                        for (int j = 0; j < dstAddress.Count; j++)
+                        for (int i = 0; i < bpSrc.Addresses.Count; i++)
                         {
-                            dstAddress.SetCurrentLine(j);
-                            var existingAddress = dstAddress;
-                            if (existingAddress.AddressName == srcAddress.AddressName)
+                            bpSrc.Addresses.SetCurrentLine(i);
+                            var srcAddress = bpSrc.Addresses;
+                            // Buscar si la dirección ya existe en el destino
+                            var dstAddress = bpDst.Addresses;
+                            bool addressExists = false;
+                            for (int j = 0; j < dstAddress.Count; j++)
                             {
-                                // Actualizar dirección existente
-                                addressExists = true;
+                                dstAddress.SetCurrentLine(j);
+                                var existingAddress = dstAddress;
+                                if (existingAddress.AddressName == srcAddress.AddressName)
+                                {
+                                    // Actualizar dirección existente
+                                    addressExists = true;
 
-                                RuleHelpers.SetIfAllowed(() => existingAddress.AddressName2 = srcAddress.AddressName2, "OCRD.CRD1.Address2", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.AddressName3 = srcAddress.AddressName3, "OCRD.CRD1.Address3", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.Street = srcAddress.Street, "OCRD.CRD1.Street", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.Block = srcAddress.Block, "OCRD.CRD1.Block", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.City = srcAddress.City, "OCRD.CRD1.City", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.ZipCode = srcAddress.ZipCode, "OCRD.CRD1.ZipCode", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.County = srcAddress.County, "OCRD.CRD1.County", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.State = srcAddress.State, "OCRD.CRD1.State", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.Country = srcAddress.Country, "OCRD.CRD1.Country", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.Country = srcAddress.Country, "OCRD.CRD1.TaxCode", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.StreetNo = srcAddress.StreetNo, "OCRD.CRD1.StreetNo", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.BuildingFloorRoom = srcAddress.BuildingFloorRoom, "OCRD.CRD1.Building", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.TaxOffice = srcAddress.TaxOffice, "OCRD.CRD1.TaxOffice", rule);
-                                RuleHelpers.SetIfAllowed(() => existingAddress.GlobalLocationNumber = srcAddress.GlobalLocationNumber, "OCRD.CRD1.GlblLocNum", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.AddressName2 = srcAddress.AddressName2, "OCRD.CRD1.Address2", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.AddressName3 = srcAddress.AddressName3, "OCRD.CRD1.Address3", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.Street = srcAddress.Street, "OCRD.CRD1.Street", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.Block = srcAddress.Block, "OCRD.CRD1.Block", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.City = srcAddress.City, "OCRD.CRD1.City", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.ZipCode = srcAddress.ZipCode, "OCRD.CRD1.ZipCode", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.County = srcAddress.County, "OCRD.CRD1.County", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.State = srcAddress.State, "OCRD.CRD1.State", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.Country = srcAddress.Country, "OCRD.CRD1.Country", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.Country = srcAddress.Country, "OCRD.CRD1.TaxCode", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.StreetNo = srcAddress.StreetNo, "OCRD.CRD1.StreetNo", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.BuildingFloorRoom = srcAddress.BuildingFloorRoom, "OCRD.CRD1.Building", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.TaxOffice = srcAddress.TaxOffice, "OCRD.CRD1.TaxOffice", rule);
+                                    RuleHelpers.SetIfAllowed(() => existingAddress.GlobalLocationNumber = srcAddress.GlobalLocationNumber, "OCRD.CRD1.GlblLocNum", rule);
 
-                                break;
+                                    break;
+                                }
+                            }
+                            if (!addressExists)
+                            {
+                                // Agregar nueva dirección
+                                dstAddress.AddressName = srcAddress.AddressName;
+                                RuleHelpers.SetIfAllowed(() => dstAddress.AddressName2 = srcAddress.AddressName2, "OCRD.CRD1.Address2", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.AddressName3 = srcAddress.AddressName3, "OCRD.CRD1.Address3", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.Street = srcAddress.Street, "OCRD.CRD1.Street", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.Block = srcAddress.Block, "OCRD.CRD1.Block", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.City = srcAddress.City, "OCRD.CRD1.City", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.ZipCode = srcAddress.ZipCode, "OCRD.CRD1.ZipCode", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.County = srcAddress.County, "OCRD.CRD1.County", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.State = srcAddress.State, "OCRD.CRD1.State", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.Country = srcAddress.Country, "OCRD.CRD1.Country", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.Country = srcAddress.Country, "OCRD.CRD1.TaxCode", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.StreetNo = srcAddress.StreetNo, "OCRD.CRD1.StreetNo", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.BuildingFloorRoom = srcAddress.BuildingFloorRoom, "OCRD.CRD1.Building", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.TaxOffice = srcAddress.TaxOffice, "OCRD.CRD1.TaxOffice", rule);
+                                RuleHelpers.SetIfAllowed(() => dstAddress.GlobalLocationNumber = srcAddress.GlobalLocationNumber, "OCRD.CRD1.GlblLocNum", rule);
                             }
                         }
-                        if (!addressExists)
-                        {
-                            // Agregar nueva dirección
-                            dstAddress.AddressName = srcAddress.AddressName;
-                            RuleHelpers.SetIfAllowed(() => dstAddress.AddressName2 = srcAddress.AddressName2, "OCRD.CRD1.Address2", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.AddressName3 = srcAddress.AddressName3, "OCRD.CRD1.Address3", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.Street = srcAddress.Street, "OCRD.CRD1.Street", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.Block = srcAddress.Block, "OCRD.CRD1.Block", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.City = srcAddress.City, "OCRD.CRD1.City", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.ZipCode = srcAddress.ZipCode, "OCRD.CRD1.ZipCode", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.County = srcAddress.County, "OCRD.CRD1.County", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.State = srcAddress.State, "OCRD.CRD1.State", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.Country = srcAddress.Country, "OCRD.CRD1.Country", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.Country = srcAddress.Country, "OCRD.CRD1.TaxCode", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.StreetNo = srcAddress.StreetNo, "OCRD.CRD1.StreetNo", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.BuildingFloorRoom = srcAddress.BuildingFloorRoom, "OCRD.CRD1.Building", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.TaxOffice = srcAddress.TaxOffice, "OCRD.CRD1.TaxOffice", rule);
-                            RuleHelpers.SetIfAllowed(() => dstAddress.GlobalLocationNumber = srcAddress.GlobalLocationNumber, "OCRD.CRD1.GlblLocNum", rule);
-                        }
-                    }
-
+                    }, "OCRD.FLAP_ADDRESSES", rule);
                     #endregion
 
                     #region  SETTERS DE DATOS - SOLAPA CONDICIONES DE PAGO
-
-                    // Condición de Pago
                     RuleHelpers.SetIfAllowed(() =>
+                    {
+                        // Condición de Pago
+                        RuleHelpers.SetIfAllowed(() =>
                     {
                         string? dstGroupNum = MasterDataMapper.MapByDescription(src, dst, table: "OCTG", codeField: "GroupNum", descField: @"""PymntGroup""", srcCode: bpSrc.PayTermsGrpCode.ToString(), "", out string? srcPymntGroup);
                         if (dstGroupNum == null)
@@ -532,327 +527,332 @@ namespace Interface_ReplicarDatos.Replication
 
                     }, "OCRD.GroupNum", rule);
 
-                    // % intereses por retraso
-                    RuleHelpers.SetIfAllowed(() => bpDst.IntrestRatePercent = bpSrc.IntrestRatePercent, "OCRD.IntrstRate", rule);
+                        // % intereses por retraso
+                        RuleHelpers.SetIfAllowed(() => bpDst.IntrestRatePercent = bpSrc.IntrestRatePercent, "OCRD.IntrstRate", rule);
 
-                    // Lista de precios
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstListNum = MasterDataMapper.MapByDescription(src, dst, table: "OPLN", codeField: "ListNum", descField: @"""ListName""", srcCode: bpSrc.PriceListNum.ToString(), "", out string? srcListName);
-                        if (dstListNum == null)
+                        // Lista de precios
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcListName))
+                            string? dstListNum = MasterDataMapper.MapByDescription(src, dst, table: "OPLN", codeField: "ListNum", descField: @"""ListName""", srcCode: bpSrc.PriceListNum.ToString(), "", out string? srcListName);
+                            if (dstListNum == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Lista de Precios '{srcListName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ListNum");
+                                if (!string.IsNullOrEmpty(srcListName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Lista de Precios '{srcListName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ListNum");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.PriceListNum = int.Parse(dstListNum);
+                            bpDst.PriceListNum = int.Parse(dstListNum);
 
-                    }, "OCRD.ListNum", rule);
+                        }, "OCRD.ListNum", rule);
 
-                    // % descuento total
-                    RuleHelpers.SetIfAllowed(() => bpDst.DiscountPercent = bpSrc.DiscountPercent, "OCRD.Discount", rule);
+                        // % descuento total
+                        RuleHelpers.SetIfAllowed(() => bpDst.DiscountPercent = bpSrc.DiscountPercent, "OCRD.Discount", rule);
 
-                    // Límite de crédito y Límite de comprometido
-                    RuleHelpers.SetIfAllowed(() => bpDst.CreditLimit = bpSrc.CreditLimit, "OCRD.CreditLine", rule);
+                        // Límite de crédito y Límite de comprometido
+                        RuleHelpers.SetIfAllowed(() => bpDst.CreditLimit = bpSrc.CreditLimit, "OCRD.CreditLine", rule);
 
-                    // Plazo reclamaciones
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstTermCode = MasterDataMapper.MapByDescription(src, dst, table: "ODUT", codeField: "TermCode", descField: @"""TermName""", srcCode: bpSrc.DunningTerm.ToString(), "", out string? srcTermName);
-                        if (dstTermCode == null)
+                        // Plazo reclamaciones
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcTermName))
+                            string? dstTermCode = MasterDataMapper.MapByDescription(src, dst, table: "ODUT", codeField: "TermCode", descField: @"""TermName""", srcCode: bpSrc.DunningTerm.ToString(), "", out string? srcTermName);
+                            if (dstTermCode == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Plazo de Reclamaciones '{srcTermName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.DunTerm");
+                                if (!string.IsNullOrEmpty(srcTermName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Plazo de Reclamaciones '{srcTermName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.DunTerm");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.DunningTerm = dstTermCode;
+                            bpDst.DunningTerm = dstTermCode;
 
-                    }, "OCRD.DunTerm", rule);
+                        }, "OCRD.DunTerm", rule);
 
-                    // Grupos de descuento efectivo
-                    RuleHelpers.SetIfAllowed(() => bpDst.DiscountRelations = bpSrc.DiscountRelations, "OCRD.DiscRel", rule);
+                        // Grupos de descuento efectivo
+                        RuleHelpers.SetIfAllowed(() => bpDst.DiscountRelations = bpSrc.DiscountRelations, "OCRD.DiscRel", rule);
 
-                    // Precio efectivo
-                    RuleHelpers.SetIfAllowed(() => bpDst.EffectivePrice = bpSrc.EffectivePrice, "OCRD.EffecPrice", rule);
+                        // Precio efectivo
+                        RuleHelpers.SetIfAllowed(() => bpDst.EffectivePrice = bpSrc.EffectivePrice, "OCRD.EffecPrice", rule);
 
-                    // Clase de tarjeta crédito
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstCreditCard = MasterDataMapper.MapByDescription(src, dst, table: "OCRC", codeField: "CreditCard", descField: @"""CardName""", srcCode: bpSrc.CreditCardCode.ToString(), "", out string? srcCreditCardName);
-                        if (dstCreditCard == null)
+                        // Clase de tarjeta crédito
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcCreditCardName))
+                            string? dstCreditCard = MasterDataMapper.MapByDescription(src, dst, table: "OCRC", codeField: "CreditCard", descField: @"""CardName""", srcCode: bpSrc.CreditCardCode.ToString(), "", out string? srcCreditCardName);
+                            if (dstCreditCard == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Clase de tarjeta crédito '{srcCreditCardName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.CreditCard");
+                                if (!string.IsNullOrEmpty(srcCreditCardName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Clase de tarjeta crédito '{srcCreditCardName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.CreditCard");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.CreditCardCode = int.Parse(dstCreditCard);
+                            bpDst.CreditCardCode = int.Parse(dstCreditCard);
 
-                    }, "OCRD.CreditCard", rule);
+                        }, "OCRD.CreditCard", rule);
 
-                    // Número de tarjeta de crédito
-                    RuleHelpers.SetIfAllowed(() => bpDst.CreditCardNum = bpSrc.CreditCardNum, "OCRD.CrCardNum", rule);
+                        // Número de tarjeta de crédito
+                        RuleHelpers.SetIfAllowed(() => bpDst.CreditCardNum = bpSrc.CreditCardNum, "OCRD.CrCardNum", rule);
 
-                    // Fecha de vencimiento
-                    RuleHelpers.SetIfAllowed(() => bpDst.ExpirationDate = bpSrc.ExpirationDate, "OCRD.CardValid", rule);
+                        // Fecha de vencimiento
+                        RuleHelpers.SetIfAllowed(() => bpDst.ExpirationDate = bpSrc.ExpirationDate, "OCRD.CardValid", rule);
 
-                    // Número ID
-                    RuleHelpers.SetIfAllowed(() => bpDst.OwnerIDNumber = bpSrc.OwnerIDNumber, "OCRD.OwnerIdNum", rule);
+                        // Número ID
+                        RuleHelpers.SetIfAllowed(() => bpDst.OwnerIDNumber = bpSrc.OwnerIDNumber, "OCRD.OwnerIdNum", rule);
 
-                    // Retraso promedio de pago
-                    RuleHelpers.SetIfAllowed(() => bpDst.AvarageLate = bpSrc.AvarageLate, "OCRD.AvarageLate", rule);
+                        // Retraso promedio de pago
+                        RuleHelpers.SetIfAllowed(() => bpDst.AvarageLate = bpSrc.AvarageLate, "OCRD.AvarageLate", rule);
 
-                    // Prioridad
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstPriority = MasterDataMapper.MapByDescription(src, dst, table: "OBPP", codeField: "PrioCode", descField: @"""PrioDesc""", srcCode: bpSrc.Priority.ToString(), "", out string? srcPrioDesc);
-                        if (dstPriority == null)
+                        // Prioridad
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcPrioDesc))
+                            string? dstPriority = MasterDataMapper.MapByDescription(src, dst, table: "OBPP", codeField: "PrioCode", descField: @"""PrioDesc""", srcCode: bpSrc.Priority.ToString(), "", out string? srcPrioDesc);
+                            if (dstPriority == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Prioridad '{srcPrioDesc}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.Priority");
+                                if (!string.IsNullOrEmpty(srcPrioDesc))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Prioridad '{srcPrioDesc}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.Priority");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.Priority = int.Parse(dstPriority);
+                            bpDst.Priority = int.Parse(dstPriority);
 
-                    }, "OCRD.Priority", rule);
+                        }, "OCRD.Priority", rule);
 
-                    // IBAN estándar
-                    RuleHelpers.SetIfAllowed(() => bpDst.IBAN = bpSrc.IBAN, "OCRD.IBAN", rule);
+                        // IBAN estándar
+                        RuleHelpers.SetIfAllowed(() => bpDst.IBAN = bpSrc.IBAN, "OCRD.IBAN", rule);
 
-                    // Fechas de pago
-                    RuleHelpers.SetIfAllowed(() => bpDst.BPPaymentDates.PaymentDate = bpSrc.BPPaymentDates.PaymentDate, "OCRD.BPPaymentDates", rule);
+                        // Fechas de pago
+                        RuleHelpers.SetIfAllowed(() => bpDst.BPPaymentDates.PaymentDate = bpSrc.BPPaymentDates.PaymentDate, "OCRD.BPPaymentDates", rule);
 
-                    // Permitir entrega parcial del pedido
-                    RuleHelpers.SetIfAllowed(() => bpDst.PartialDelivery = bpSrc.PartialDelivery, "OCRD.PartDelivr", rule);
+                        // Permitir entrega parcial del pedido
+                        RuleHelpers.SetIfAllowed(() => bpDst.PartialDelivery = bpSrc.PartialDelivery, "OCRD.PartDelivr", rule);
 
-                    // Permitir entrega parcial por filas
-                    RuleHelpers.SetIfAllowed(() => bpDst.BackOrder = bpSrc.BackOrder, "OCRD.BackOrder", rule);
+                        // Permitir entrega parcial por filas
+                        RuleHelpers.SetIfAllowed(() => bpDst.BackOrder = bpSrc.BackOrder, "OCRD.BackOrder", rule);
 
-                    // No aplicar grupos de descuento
-                    RuleHelpers.SetIfAllowed(() => bpDst.NoDiscounts = bpSrc.NoDiscounts, "OCRD.NoDiscount", rule);
+                        // No aplicar grupos de descuento
+                        RuleHelpers.SetIfAllowed(() => bpDst.NoDiscounts = bpSrc.NoDiscounts, "OCRD.NoDiscount", rule);
 
-                    // Cheques que se pueden endosar desde este SN
-                    RuleHelpers.SetIfAllowed(() => bpDst.EndorsableChecksFromBP = bpSrc.EndorsableChecksFromBP, "OCRD.EdrsFromBP", rule);
+                        // Cheques que se pueden endosar desde este SN
+                        RuleHelpers.SetIfAllowed(() => bpDst.EndorsableChecksFromBP = bpSrc.EndorsableChecksFromBP, "OCRD.EdrsFromBP", rule);
 
-                    // Este SN acepta cheques endosados
-                    RuleHelpers.SetIfAllowed(() => bpDst.AcceptsEndorsedChecks = bpSrc.AcceptsEndorsedChecks, "OCRD.EdrsToBP", rule);
+                        // Este SN acepta cheques endosados
+                        RuleHelpers.SetIfAllowed(() => bpDst.AcceptsEndorsedChecks = bpSrc.AcceptsEndorsedChecks, "OCRD.EdrsToBP", rule);
 
-                    // Tipo de cambio para pagos recibidos
-                    RuleHelpers.SetIfAllowed(() => bpDst.ExchangeRateForIncomingPayment = bpSrc.ExchangeRateForIncomingPayment, "OCRD.EnERD4In", rule);
+                        // Tipo de cambio para pagos recibidos
+                        RuleHelpers.SetIfAllowed(() => bpDst.ExchangeRateForIncomingPayment = bpSrc.ExchangeRateForIncomingPayment, "OCRD.EnERD4In", rule);
 
-                    // Tipo de cambio para pagos efectuados
-                    RuleHelpers.SetIfAllowed(() => bpDst.ExchangeRateForOutgoingPayment = bpSrc.ExchangeRateForOutgoingPayment, "OCRD.EnERD4Out", rule);
-
+                        // Tipo de cambio para pagos efectuados
+                        RuleHelpers.SetIfAllowed(() => bpDst.ExchangeRateForOutgoingPayment = bpSrc.ExchangeRateForOutgoingPayment, "OCRD.EnERD4Out", rule);
+                    }, "OCRD.FLAP_PAYMENT_TERMS", rule);
                     #endregion
 
                     #region  SETTERS DE DATOS - SOLAPA EJECUCIÓN DE PAGO
-
-                    // País/Región
-                    RuleHelpers.SetIfAllowed(() => bpDst.HouseBankCountry = bpSrc.HouseBankCountry, "OCRD.HousBnkCry", rule);
-
-                    // Banco
                     RuleHelpers.SetIfAllowed(() =>
                     {
-                        string? dstHouseBank = MasterDataMapper.MapByDescription(src, dst, table: "ODSC", codeField: "BankCode", descField: @"""BankName""", srcCode: bpSrc.HouseBank, "", out string? srcBankName);
-                        if (dstHouseBank == null)
+                        // País/Región
+                        RuleHelpers.SetIfAllowed(() => bpDst.HouseBankCountry = bpSrc.HouseBankCountry, "OCRD.HousBnkCry", rule);
+
+                        // Banco
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcBankName))
+                            string? dstHouseBank = MasterDataMapper.MapByDescription(src, dst, table: "ODSC", codeField: "BankCode", descField: @"""BankName""", srcCode: bpSrc.HouseBank, "", out string? srcBankName);
+                            if (dstHouseBank == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Banco '{srcBankName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.HouseBank");
+                                if (!string.IsNullOrEmpty(srcBankName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Banco '{srcBankName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.HouseBank");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.HouseBank = dstHouseBank;
+                            bpDst.HouseBank = dstHouseBank;
 
-                    }, "OCRD.HouseBank", rule);
+                        }, "OCRD.HouseBank", rule);
 
-                    // Cuenta bancaria
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstHouseBankAcct = MasterDataMapper.MapByDescription(src, dst, table: "DSC1", codeField: "Account", descField: @"""Account""", srcCode: bpSrc.HouseBankAccount, "", out string? srcHouseBankAccount);
-
-                        if (dstHouseBankAcct == null)
+                        // Cuenta bancaria
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcHouseBankAccount))
+                            string? dstHouseBankAcct = MasterDataMapper.MapByDescription(src, dst, table: "DSC1", codeField: "Account", descField: @"""Account""", srcCode: bpSrc.HouseBankAccount, "", out string? srcHouseBankAccount);
+
+                            if (dstHouseBankAcct == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Cuenta bancaria '{srcHouseBankAccount}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.HousBnkAct");
+                                if (!string.IsNullOrEmpty(srcHouseBankAccount))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Cuenta bancaria '{srcHouseBankAccount}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.HousBnkAct");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.HouseBankAccount = dstHouseBankAcct;
+                            bpDst.HouseBankAccount = dstHouseBankAcct;
 
-                    }, "OCRD.HousBnkAct", rule);
+                        }, "OCRD.HousBnkAct", rule);
 
-                    // IBAN de la cuenta bancaria {GET} ??????????????????????
+                        // IBAN de la cuenta bancaria {GET} ??????????????????????
 
-                    // Info detallada de referencia
-                    RuleHelpers.SetIfAllowed(() => bpDst.ReferenceDetails = bpSrc.ReferenceDetails, "OCRD.RefDetails", rule);
+                        // Info detallada de referencia
+                        RuleHelpers.SetIfAllowed(() => bpDst.ReferenceDetails = bpSrc.ReferenceDetails, "OCRD.RefDetails", rule);
 
-                    // Bloqueo de pago
-                    RuleHelpers.SetIfAllowed(() => bpDst.PaymentBlock = bpSrc.PaymentBlock, "OCRD.PaymBlock", rule);
+                        // Bloqueo de pago
+                        RuleHelpers.SetIfAllowed(() => bpDst.PaymentBlock = bpSrc.PaymentBlock, "OCRD.PaymBlock", rule);
 
-                    // Pago unico
-                    RuleHelpers.SetIfAllowed(() => bpDst.PaymentBlock = bpSrc.PaymentBlock, "OCRD.SinglePaym", rule);
+                        // Pago unico
+                        RuleHelpers.SetIfAllowed(() => bpDst.PaymentBlock = bpSrc.PaymentBlock, "OCRD.SinglePaym", rule);
 
-                    // Autorización de consolidación
-                    RuleHelpers.SetIfAllowed(() => bpDst.CollectionAuthorization = bpSrc.CollectionAuthorization, "OCRD.CollecAuth", rule);
+                        // Autorización de consolidación
+                        RuleHelpers.SetIfAllowed(() => bpDst.CollectionAuthorization = bpSrc.CollectionAuthorization, "OCRD.CollecAuth", rule);
 
-                    // Código de imputación de los gastos bancarios
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstBankChargesAllocationCode = MasterDataMapper.MapByDescription(src, dst, table: "OBCA", codeField: "Code", descField: @"""Name""", srcCode: bpSrc.BankChargesAllocationCode, "", out string? srcBankChargesAllocationCode);
-
-                        if (dstBankChargesAllocationCode == null)
+                        // Código de imputación de los gastos bancarios
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcBankChargesAllocationCode))
+                            string? dstBankChargesAllocationCode = MasterDataMapper.MapByDescription(src, dst, table: "OBCA", codeField: "Code", descField: @"""Name""", srcCode: bpSrc.BankChargesAllocationCode, "", out string? srcBankChargesAllocationCode);
+
+                            if (dstBankChargesAllocationCode == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Código de imputación de los gastos bancarios '{srcBankChargesAllocationCode}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.BCACode");
+                                if (!string.IsNullOrEmpty(srcBankChargesAllocationCode))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Código de imputación de los gastos bancarios '{srcBankChargesAllocationCode}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.BCACode");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.BankChargesAllocationCode = dstBankChargesAllocationCode;
+                            bpDst.BankChargesAllocationCode = dstBankChargesAllocationCode;
 
-                    }, "OCRD.BCACode", rule);
+                        }, "OCRD.BCACode", rule);
 
-                    // Calcular automáticamente gastos bancarios para pagos recibidos
-                    RuleHelpers.SetIfAllowed(() => bpDst.AutomaticPosting = bpSrc.AutomaticPosting, "OCRD.AutoCalBCG", rule);
-
+                        // Calcular automáticamente gastos bancarios para pagos recibidos
+                        RuleHelpers.SetIfAllowed(() => bpDst.AutomaticPosting = bpSrc.AutomaticPosting, "OCRD.AutoCalBCG", rule);
+                    }, "OCRD.FLAP_PAYMENT_EXEC", rule);
                     #endregion
 
                     #region  SETTERS DE DATOS - SOLAPA FINANZAS
-                    
 
-                    #region GENERAL
-                    // Socio comercial de consolidación
                     RuleHelpers.SetIfAllowed(() =>
                     {
-                        string? dstFatherCard = MasterDataMapper.MapByDescription(src, dst, table: "OCRD", codeField: "CardCode", descField: @"""CardName""", srcCode: bpSrc.FatherCard, "", out string? srcFatherName);
-
-                        if (dstFatherCard == null)
+                        #region GENERAL
+                        // Socio comercial de consolidación
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcFatherName))
+                            string? dstFatherCard = MasterDataMapper.MapByDescription(src, dst, table: "OCRD", codeField: "CardCode", descField: @"""CardName""", srcCode: bpSrc.FatherCard, "", out string? srcFatherName);
+
+                            if (dstFatherCard == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Socio comercial de consolidación '{srcFatherName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.BCACode");
+                                if (!string.IsNullOrEmpty(srcFatherName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Socio comercial de consolidación '{srcFatherName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.BCACode");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.FatherCard = dstFatherCard;
+                            bpDst.FatherCard = dstFatherCard;
 
-                    }, "OCRD.BCACode", rule);
+                        }, "OCRD.BCACode", rule);
 
-                    // Consolidación de pagos / Consolidaci&ón de entregas
-                    RuleHelpers.SetIfAllowed(() => bpDst.FatherType = bpSrc.FatherType, "OCRD.FatherType", rule);
+                        // Consolidación de pagos / Consolidaci&ón de entregas
+                        RuleHelpers.SetIfAllowed(() => bpDst.FatherType = bpSrc.FatherType, "OCRD.FatherType", rule);
 
-                    // Bloquear reclamaciones
-                    RuleHelpers.SetIfAllowed(() => bpDst.BlockDunning = bpSrc.BlockDunning, "OCRD.BlockDunn", rule);
+                        // Bloquear reclamaciones
+                        RuleHelpers.SetIfAllowed(() => bpDst.BlockDunning = bpSrc.BlockDunning, "OCRD.BlockDunn", rule);
 
-                    // Proveedor conectado
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        string? dstLinkBp = MasterDataMapper.MapByDescription(src, dst, table: "OCRD", codeField: "CardCode", descField: @"""CardName""", srcCode: bpSrc.LinkedBusinessPartner, "", out string? srcLinkBpName);
-
-                        if (dstLinkBp == null)
+                        // Proveedor conectado
+                        RuleHelpers.SetIfAllowed(() =>
                         {
-                            if (!string.IsNullOrEmpty(srcLinkBpName))
+                            string? dstLinkBp = MasterDataMapper.MapByDescription(src, dst, table: "OCRD", codeField: "CardCode", descField: @"""CardName""", srcCode: bpSrc.LinkedBusinessPartner, "", out string? srcLinkBpName);
+
+                            if (dstLinkBp == null)
                             {
-                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Socio comercial de consolidación '{srcLinkBpName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ConnBP");
+                                if (!string.IsNullOrEmpty(srcLinkBpName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Socio comercial de consolidación '{srcLinkBpName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ConnBP");
+                                }
+                                return;
                             }
-                            return;
-                        }
-                        bpDst.LinkedBusinessPartner = dstLinkBp;
+                            bpDst.LinkedBusinessPartner = dstLinkBp;
 
-                    }, "OCRD.ConnBP", rule);
+                        }, "OCRD.ConnBP", rule);
 
-                    // Grupo de planificación
-                    RuleHelpers.SetIfAllowed(() => bpDst.PlanningGroup = bpSrc.PlanningGroup, "OCRD.PlngGroup", rule);
+                        // Grupo de planificación
+                        RuleHelpers.SetIfAllowed(() => bpDst.PlanningGroup = bpSrc.PlanningGroup, "OCRD.PlngGroup", rule);
 
-                    // Utilizar cuenta de mercancías enviadas
-                    RuleHelpers.SetIfAllowed(() => bpDst.UseShippedGoodsAccount = bpSrc.UseShippedGoodsAccount, "OCRD.UseShpdGd", rule);
+                        // Utilizar cuenta de mercancías enviadas
+                        RuleHelpers.SetIfAllowed(() => bpDst.UseShippedGoodsAccount = bpSrc.UseShippedGoodsAccount, "OCRD.UseShpdGd", rule);
 
-                    // Empresa asociada
-                    RuleHelpers.SetIfAllowed(() => bpDst.Affiliate = bpSrc.Affiliate, "OCRD.Affiliate", rule);
+                        // Empresa asociada
+                        RuleHelpers.SetIfAllowed(() => bpDst.Affiliate = bpSrc.Affiliate, "OCRD.Affiliate", rule);
 
-                    #endregion
+                        #endregion
 
-                    #region IMPUESTO
+                        #region IMPUESTO
 
-                    // Obligat. / Extranjero
-                    RuleHelpers.SetIfAllowed(() => bpDst.VatLiable = bpSrc.VatLiable, "OCRD.VatStatus", rule);
+                        // Obligat. / Extranjero
+                        RuleHelpers.SetIfAllowed(() => bpDst.VatLiable = bpSrc.VatLiable, "OCRD.VatStatus", rule);
 
-                    // Sujeto a retención
-                    RuleHelpers.SetIfAllowed(() => bpDst.SubjectToWithholdingTax = bpSrc.SubjectToWithholdingTax, "OCRD.WTLiable", rule);
+                        // Sujeto a retención
+                        RuleHelpers.SetIfAllowed(() => bpDst.SubjectToWithholdingTax = bpSrc.SubjectToWithholdingTax, "OCRD.WTLiable", rule);
 
-                    // ID de ingresos brutos
-                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_GrsIncId").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_GrsIncId").Value, "OCRD.U_B1SYS_GrsIncId", rule);
+                        // ID de ingresos brutos
+                        RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_GrsIncId").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_GrsIncId").Value, "OCRD.U_B1SYS_GrsIncId", rule);
 
-                    // Categoría de ingresos brutos
-                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_GrsIncCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_GrsIncCtg").Value, "OCRD.U_B1SYS_GrsIncCtg", rule);
+                        // Categoría de ingresos brutos
+                        RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_GrsIncCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_GrsIncCtg").Value, "OCRD.U_B1SYS_GrsIncCtg", rule);
 
-                    // Categoría de IVA
-                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_VATCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_VATCtg").Value, "OCRD.U_B1SYS_VATCtg", rule);
+                        // Categoría de IVA
+                        RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_VATCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_VATCtg").Value, "OCRD.U_B1SYS_VATCtg", rule);
 
-                    // Categoría de impuesto a las ganancias
-                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_IncTaxCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_IncTaxCtg").Value, "OCRD.U_B1SYS_IncTaxCtg", rule);
+                        // Categoría de impuesto a las ganancias
+                        RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_IncTaxCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_IncTaxCtg").Value, "OCRD.U_B1SYS_IncTaxCtg", rule);
 
-                    // Estado de Reproweb
-                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_ReproWebSta").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_ReproWebSta").Value, "OCRD.U_B1SYS_ReproWebSta", rule);
+                        // Estado de Reproweb
+                        RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_ReproWebSta").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_ReproWebSta").Value, "OCRD.U_B1SYS_ReproWebSta", rule);
 
-                    // Participación accionaria en otras empresas
-                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_ShareFromO").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_ShareFromO").Value, "OCRD.U_B1SYS_ShareFromO", rule);
+                        // Participación accionaria en otras empresas
+                        RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_ShareFromO").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_ShareFromO").Value, "OCRD.U_B1SYS_ShareFromO", rule);
 
-                    // Empresario
-                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_Employer").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_Employer").Value, "OCRD.U_B1SYS_Employer", rule);
+                        // Empresario
+                        RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_Employer").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_Employer").Value, "OCRD.U_B1SYS_Employer", rule);
 
-                    // Actividad de monotributo
-                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_MonoAct").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_MonoAct").Value, "OCRD.U_B1SYS_MonoAct", rule);
+                        // Actividad de monotributo
+                        RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_MonoAct").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_MonoAct").Value, "OCRD.U_B1SYS_MonoAct", rule);
 
-                    // Categoría de monotributo
-                    RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_MonoCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_MonoCtg").Value, "OCRD.U_B1SYS_MonoCtg", rule);
+                        // Categoría de monotributo
+                        RuleHelpers.SetIfAllowed(() => bpDst.UserFields.Fields.Item("U_B1SYS_MonoCtg").Value = bpSrc.UserFields.Fields.Item("U_B1SYS_MonoCtg").Value, "OCRD.U_B1SYS_MonoCtg", rule);
 
-                    // Número EORI
-                    RuleHelpers.SetIfAllowed(() => bpDst.EORINumber = bpSrc.EORINumber, "OCRD.EORINumber", rule);
+                        // Número EORI
+                        RuleHelpers.SetIfAllowed(() => bpDst.EORINumber = bpSrc.EORINumber, "OCRD.EORINumber", rule);
 
 
-                    #endregion
-
+                        #endregion
+                    }, "OCRD.FLAP_FINANCE", rule);
                     #endregion
 
                     #region SETTERS DE DATOS - SOLAPA PROPIEDADES
-
-                    // Nombre de la propiedad
-                    for (int i = 1; i <= 64; i++)
+                    RuleHelpers.SetIfAllowed(() =>
                     {
-                        string fieldName = $"QryGroup{i}";
-                        RuleHelpers.SetIfAllowed(() => bpDst.Properties[i] = bpSrc.Properties[i], $"OCRD.{fieldName}", rule);
-                    }
-
+                        // Nombre de la propiedad
+                        for (int i = 1; i <= 64; i++)
+                        {
+                            string fieldName = $"QryGroup{i}";
+                            RuleHelpers.SetIfAllowed(() => bpDst.Properties[i] = bpSrc.Properties[i], $"OCRD.{fieldName}", rule);
+                        }
+                    }, "OCRD.FLAP7_PROPERTIES", rule);
                     #endregion
 
                     #region SETTERS DE DATOS - SOLAPA COMENTARIOS
-
-                    // Comentario
-                    RuleHelpers.SetIfAllowed(() => bpDst.FreeText = bpSrc.FreeText, "OCRD.Free_Text", rule);
-
+                    RuleHelpers.SetIfAllowed(() =>
+                    {
+                        // Comentario
+                        RuleHelpers.SetIfAllowed(() => bpDst.FreeText = bpSrc.FreeText, "OCRD.Free_Text", rule);
+                    }, "OCRD.FLAP_COMMENTS", rule);
                     #endregion
 
                     #region SETTERS DE DATOS - SOLAPA DOCUMENTOS ELECTRÓNICOS
+                    RuleHelpers.SetIfAllowed(() =>
+                    {
+                        // Relevante para FCE
+                        RuleHelpers.SetIfAllowed(() => bpDst.FCERelevant = bpSrc.FCERelevant, "OCRD.FCERelevnt", rule);
 
-                    // Relevante para FCE
-                    RuleHelpers.SetIfAllowed(() => bpDst.FCERelevant = bpSrc.FCERelevant, "OCRD.FCERelevnt", rule);
+                        // Validar documentos de entrega base para mes de contabilización e integridad
+                        RuleHelpers.SetIfAllowed(() => bpDst.FCEValidateBaseDelivery = bpSrc.FCEValidateBaseDelivery, "OCRD.FCEVldte", rule);
 
-                    // Validar documentos de entrega base para mes de contabilización e integridad
-                    RuleHelpers.SetIfAllowed(() => bpDst.FCEValidateBaseDelivery = bpSrc.FCEValidateBaseDelivery, "OCRD.FCEVldte", rule);
-
-                    // Utilizar FCEs como medios de pago
-                    RuleHelpers.SetIfAllowed(() => bpDst.FCEAsPaymentMeans = bpSrc.FCEAsPaymentMeans, "OCRD.FCEPmnMean", rule);
-
+                        // Utilizar FCEs como medios de pago
+                        RuleHelpers.SetIfAllowed(() => bpDst.FCEAsPaymentMeans = bpSrc.FCEAsPaymentMeans, "OCRD.FCEPmnMean", rule);
+                    }, "OCRD.FLAP_E_DOCUMENTS", rule);
                     #endregion
 
 
@@ -862,16 +862,20 @@ namespace Interface_ReplicarDatos.Replication
                     LogService.HandleDiApiResult(src, dst, ret, rule.Code, "OCRD", cardCode);
 
                     // 5) Actualizar checkpoint con la fila actual
-                    CheckpointService.UpdateFromRow(ref cp, rs, "UpdateDate", "UpdateTS");
+
+                    if (ret == 0)
+                    {
+                        CheckpointService.UpdateFromRow(ref cp, rs, "UpdateDate", "UpdateTS");
+                    }
+
+                    if (dst.InTransaction)
+                        dst.EndTransaction(BoWfTransOpt.wf_Commit);
 
                     rs.MoveNext();
                 }
 
-                if (dst.InTransaction)
-                    dst.EndTransaction(BoWfTransOpt.wf_Commit);
 
                 // Guardar checkpoint final
-
                 CheckpointService.PersistCheckpoint(src, rule.Code, cp);
 
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
@@ -886,36 +890,6 @@ namespace Interface_ReplicarDatos.Replication
             {
                 factory.Disconnect(dst);
                 factory.Disconnect(src);
-            }
-        }
-
-        private static bool PassesBpTypeFilter(RepRule rule, string cardType)
-        {
-            // cardType: 'C' clientes, 'S' proveedores
-            switch (rule.RepBPType)
-            {
-                case "P": // solo proveedores
-                    return cardType == "S";
-                case "C": // solo clientes
-                    return cardType == "C";
-                case "B": // ambos
-                default:
-                    return cardType == "C" || cardType == "S";
-            }
-        }
-
-        private static bool PassesBpTypeFilter(RepRule rule, BoCardTypes cardType)
-        {
-            // cardType: 'C' clientes, 'S' proveedores
-            switch (rule.RepBPType)
-            {
-                case "P": // solo proveedores
-                    return cardType == BoCardTypes.cSupplier;
-                case "C": // solo clientes
-                    return cardType == BoCardTypes.cCustomer;
-                case "B": // ambos
-                default:
-                    return cardType == BoCardTypes.cCustomer || cardType == BoCardTypes.cSupplier;
             }
         }
     }
