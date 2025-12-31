@@ -1,5 +1,6 @@
 using Interface_ReplicarDatos.Replication.Models;
 using Interface_ReplicarDatos.Replication.Services;
+using NLog.Targets.Wrappers;
 using SAPbobsCOM;
 using System;
 
@@ -37,8 +38,7 @@ namespace Interface_ReplicarDatos.Replication
 
                 rs.DoQuery(sql);
 
-                if (!dst.InTransaction)
-                    dst.StartTransaction();
+                
 
                 var itmSrc = (Items)src.GetBusinessObject(BoObjectTypes.oItems);
                 var itmDst = (Items)dst.GetBusinessObject(BoObjectTypes.oItems);
@@ -57,13 +57,16 @@ namespace Interface_ReplicarDatos.Replication
                         }
                     }
 
-                    if (!itmSrc.GetByKey(itemCode))
-                    {
-                        LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: itemCode,
-                        status: "WARNING", detail: "No se pudo cargar el artículo origen OITM", excludeKey: null);
-                        rs.MoveNext();
-                        continue;
-                    }
+                    if (!dst.InTransaction)
+                        dst.StartTransaction();
+
+                    //if (!itmSrc.GetByKey(itemCode))
+                    //{
+                    //    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: itemCode,
+                    //    status: "WARNING", detail: "No se pudo cargar el artículo origen OITM", excludeKey: null);
+                    //    rs.MoveNext();
+                    //    continue;
+                    //}
 
                     bool exists = itmDst.GetByKey(itemCode);
                     if (!exists)
@@ -74,26 +77,160 @@ namespace Interface_ReplicarDatos.Replication
                     // ================= CABECERA / DATOS GENERALES =================
                     RuleHelpers.SetIfAllowed(() =>
                     {
-                        RuleHelpers.SetIfAllowed(() => itmDst.ItemName = itmSrc.ItemName, "OITM.ItemName", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.ForeignName = itmSrc.ForeignName, "OITM.FrgnName", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.ItemsGroupCode = itmSrc.ItemsGroupCode, "OITM.ItmsGrpCod", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.InventoryItem = itmSrc.InventoryItem, "OITM.InvntItem", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.SalesItem = itmSrc.SalesItem, "OITM.SellItem", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseItem = itmSrc.PurchaseItem, "OITM.PrchseItem", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.BarCode = itmSrc.BarCode, "OITM.CodeBars", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.Manufacturer = itmSrc.Manufacturer, "OITM.FirmCode", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.ManageSerialNumbers = itmSrc.ManageSerialNumbers, "OITM.ManSerNum", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.ManageBatchNumbers = itmSrc.ManageBatchNumbers, "OITM.ManBtchNum", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.SalesUnit = itmSrc.SalesUnit, "OITM.SalUnitMsr", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseUnit = itmSrc.PurchaseUnit, "OITM.BuyUnitMsr", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.Valid = itmSrc.Valid, "OITM.validFor", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.ValidFrom = itmSrc.ValidFrom, "OITM.validFrom", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.ValidTo = itmSrc.ValidTo, "OITM.validTo", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.ValidRemarks = itmSrc.ValidRemarks, "OITM.ValidComm", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.Frozen = itmSrc.Frozen, "OITM.frozenFor", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.FrozenFrom = itmSrc.FrozenFrom, "OITM.frozenFrom", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.FrozenTo = itmSrc.FrozenTo, "OITM.frozenTo", rule);
+                        RuleHelpers.SetIfAllowed(() => itmDst.ItemName = itmSrc.ItemName, "OITM.ItemName", rule); // NOMBRE ARTICULO
+                        RuleHelpers.SetIfAllowed(() => itmDst.ForeignName = itmSrc.ForeignName, "OITM.FrgnName", rule); // NOMBRE EXTRANJERO
+                        RuleHelpers.SetIfAllowed(() => itmDst.ItemType = itmSrc.ItemType, "OITM.ItemType", rule); // CLASE DE ARTICULO
+                        RuleHelpers.SetIfAllowed(() => // GRUPOS DE ARTICULOS
+                        {
+                            string? dstItemGrpCode = MasterDataMapper.MapByDescription(src, dst, table: "OITB", codeField: "ItmsGrpCod", descField: @"""ItmsGrpNam""", srcCode: itmSrc.ItemsGroupCode.ToString(), "", out string? srcItemGroupName);
+                            if (dstItemGrpCode == null)
+                            {
+                                if (!string.IsNullOrEmpty(srcItemGroupName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: itmSrc.ItemCode, "WARNING", $"No se encontró mapeo para Grupo de Artículo '{srcItemGroupName}' (ItemCode: {itmSrc.ItemCode}). Se omite la asignación.", "OITM.ItmsGrpCod");
+                                }
+                                return;
+                            }
+                            itmDst.ItemsGroupCode = int.Parse(dstItemGrpCode);
+
+                        }, "OITM.ItmsGrpCod", rule);
+
+                        RuleHelpers.SetIfAllowed(() => // GRUPOS DE UNIDADES DE MEDIDA 
+                        {
+                            string? dstUgpCode = MasterDataMapper.MapByDescription(src, dst, table: "OUGP", codeField: "UgpEntry", descField: @"""UgpCode""", srcCode: itmSrc.UoMGroupEntry.ToString(), "", out string? srcUgpCode);
+                            if (dstUgpCode == null)
+                            {
+                                if (!string.IsNullOrEmpty(srcUgpCode))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: itmSrc.ItemCode, "WARNING", $"No se encontró mapeo para Grupo de Unidad de Medida '{srcUgpCode}' (ItemCode: {itmSrc.ItemCode}). Se omite la asignación.", "OITM.UgpEntry");
+                                }
+                                return;
+                            }
+                            itmDst.UoMGroupEntry = int.Parse(dstUgpCode);
+
+                        }, "OITM.UgpEntry", rule);
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.BarCode = itmSrc.BarCode, "OITM.CodeBars", rule); // CÓDIGO DE BARRAS
+
+                        RuleHelpers.SetIfAllowed(() => // UNIDAD DE DETERMINACIÓN DE PRECIOS
+                        {
+                            string? dstPricingUnit = MasterDataMapper.MapByDescription(src, dst, table: "OUOM", codeField: "UomEntry", descField: @"""UomCode""", srcCode: itmSrc.PricingUnit.ToString(), "", out string? srcPricingUnit);
+                            if (dstPricingUnit == null)
+                            {
+                                if (!string.IsNullOrEmpty(srcPricingUnit))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: itmSrc.ItemCode, "WARNING", $"No se encontró mapeo para Unidad de determinacion de precios '{srcPricingUnit}' (ItemCode: {itmSrc.ItemCode}). Se omite la asignación.", "OITM.PriceUnit");
+                                }
+                                return;
+                            }
+                            itmDst.PricingUnit = int.Parse(dstPricingUnit);
+
+                        }, "OITM.PriceUnit", rule);
+
+
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.InventoryItem = itmSrc.InventoryItem, "OITM.InvntItem", rule); // ARTÍCULO DE INVENTARIO
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.SalesItem = itmSrc.SalesItem, "OITM.SellItem", rule); // ARTÍCULO DE VENTA
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseItem = itmSrc.PurchaseItem, "OITM.PrchseItem", rule);  // ARTÍCULO DE COMPRA
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.WTLiable = itmSrc.WTLiable, "OITM.WTLiable", rule); // SUJETO RETENCIÓN
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.IndirectTax = itmSrc.IndirectTax, "OITM.IndirctTax", rule); // IMPUESTO INDIRECTO
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.NoDiscounts = itmSrc.NoDiscounts, "OITM.NoDiscount", rule); // SIN DESCUENTOS
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.Manufacturer = itmSrc.Manufacturer, "OITM.FirmCode", rule); // FABRICANTE
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.SWW = itmSrc.SWW, "OITM.SWW", rule); // ID ADICIONAL
+
+                        RuleHelpers.SetIfAllowed(() => // FORMA DE ENVÍO
+                        {
+                            
+
+                            string? dstShipType = MasterDataMapper.MapByDescription(src, dst, table: "OSHP", codeField: "TrnspCode", descField: @"""TrnspName""", srcCode: itmSrc.ShipType.ToString(), "", out string? srcShipTypeNam);
+                            if (dstShipType == null)
+                            {
+                                if (!string.IsNullOrEmpty(srcShipTypeNam))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: itmSrc.ItemCode, "WARNING", $"No se encontró mapeo para Forma de envío '{srcShipTypeNam}' (ItemCode: {itmSrc.ItemCode}). Se omite la asignación.", "OITM.PriceUnit");
+                                }
+                                return;
+                            }
+                            itmDst.ShipType = int.Parse(dstShipType);
+
+                        }, "OITM.ShipType", rule);
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.Valid = itmSrc.Valid, "OITM.validFor", rule); // ARTÍCULO VÁLIDO
+                        RuleHelpers.SetIfAllowed(() => itmDst.ValidFrom = itmSrc.ValidFrom, "OITM.validFrom", rule); // VÁLIDO DESDE
+                        RuleHelpers.SetIfAllowed(() => itmDst.ValidTo = itmSrc.ValidTo, "OITM.validTo", rule); // VÁLIDO HASTA
+                        RuleHelpers.SetIfAllowed(() => itmDst.ValidRemarks = itmSrc.ValidRemarks, "OITM.ValidComm", rule); // COMENTARIOS VÁLIDO
+                        RuleHelpers.SetIfAllowed(() => itmDst.Frozen = itmSrc.Frozen, "OITM.frozenFor", rule); // ARTÍCULO BLOQUEADO
+                        RuleHelpers.SetIfAllowed(() => itmDst.FrozenFrom = itmSrc.FrozenFrom, "OITM.frozenFrom", rule); // BLOQUEADO DESDE
+                        RuleHelpers.SetIfAllowed(() => itmDst.FrozenTo = itmSrc.FrozenTo, "OITM.frozenTo", rule); // BLOQUEADO HASTA
+
                     }, "OITM.FLAP_GENERAL", rule);
+
+                    // ================= DATOS DE COMPRAS =================
+                    RuleHelpers.SetIfAllowed(() =>
+                    {
+
+                        RuleHelpers.SetIfAllowed(() => {
+                            string? dstSuppCardCode = MasterDataMapper.MapByDescription(src, dst, table: "OCRD", codeField: "CardCode", descField: @"""CardName""", srcCode: itmSrc.PreferredVendors.BPCode, "", out string? srcSuppCardName);
+                            if (dstSuppCardCode == null)
+                            {
+                                if (!string.IsNullOrEmpty(srcSuppCardName))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: itmSrc.ItemCode, "WARNING", $"No se encontró mapeo para Proveedor predeterminado '{srcSuppCardName}' (ItemCode: {itmSrc.ItemCode}). Se omite la asignación.", "OITM.CardCode");
+                                }
+                                return;
+                            }
+                            itmDst.PreferredVendors.Add();
+                            itmDst.PreferredVendors.BPCode = dstSuppCardCode;
+
+                        }, "OITM.CardCode", rule); // CÓDIGO DE PROVEEDOR
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.SupplierCatalogNo = itmSrc.SupplierCatalogNo, "OITM.SuppCatNum", rule); // NÚMERO DE CATÁLOGO DEL PROVEEDOR
+
+                        RuleHelpers.SetIfAllowed(() => // UNIDAD DE MEDIDA DE COMPRAS
+                        {
+                            string? dstBuyUnit = MasterDataMapper.MapByDescription(src, dst, table: "OUOM", codeField: "UomEntry", descField: @"""UomCode""", srcCode: itmSrc.PurchaseUnit.ToString(), "", out string? srcBuyUnit);
+                            if (dstBuyUnit == null)
+                            {
+                                if (!string.IsNullOrEmpty(srcBuyUnit))
+                                {
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: itmSrc.ItemCode, "WARNING", $"No se encontró mapeo para Código de unidad de medida de compras '{srcBuyUnit}' (ItemCode: {itmSrc.ItemCode}). Se omite la asignación.", "OITM.PriceUnit");
+                                }
+                                return;
+                            }
+                            itmDst.PurchaseUnit = dstBuyUnit;
+
+                        }, "OITM.BuyUnitMsr", rule);
+
+                        
+                        RuleHelpers.SetIfAllowed(() => itmDst.ApTaxCode = itmSrc.ApTaxCode, "OITM.TaxCodeAP", rule); // CÓDIGO DE IMPUESTOS DE COMPRAS
+
+                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseLengthUnit = itmSrc.PurchaseLengthUnit, "OITM.BLength1", rule); // UNIDAD DE LONGITUD DE COMPRAS
+                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseWidthUnit  = itmSrc.PurchaseWidthUnit,  "OITM.BLength2", rule); // UNIDAD DE ANCHURA DE COMPRAS
+                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseHeightUnit = itmSrc.PurchaseHeightUnit, "OITM.BLength3", rule); // UNIDAD DE ALTURA DE COMPRAS
+
+                        FALTA TERMINAR
+
+                        /*
+                            BLen1Unit
+                            Blength2
+                            BLen2Unit
+                            BVolume
+                            BVolUnit
+                            BWeight1
+                            BWght1Unit
+                            BWeight2
+                            BWght2Unit
+                         */
+
+                    }, "OITM.FLAP_PURCHASE", rule);
+
 
                     // ================= DATOS DE INVENTARIO =================
                     RuleHelpers.SetIfAllowed(() =>
@@ -132,18 +269,7 @@ namespace Interface_ReplicarDatos.Replication
                         RuleHelpers.SetIfAllowed(() => itmDst.SalesFactor4 = itmSrc.SalesFactor4, "OITM.SalFactor4", rule);
                     }, "OITM.FLAP_SALES", rule);
 
-                    // ================= DATOS DE COMPRAS =================
-                    RuleHelpers.SetIfAllowed(() =>
-                    {
-                        // Grupo de IVA compras
-                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseVATGroup = itmSrc.PurchaseVATGroup, "OITM.VatGroupPu", rule);
-
-                        // Factores de compra: columnas reales PurFactor*
-                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseFactor1 = itmSrc.PurchaseFactor1, "OITM.PurFactor1", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseFactor2 = itmSrc.PurchaseFactor2, "OITM.PurFactor2", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseFactor3 = itmSrc.PurchaseFactor3, "OITM.PurFactor3", rule);
-                        RuleHelpers.SetIfAllowed(() => itmDst.PurchaseFactor4 = itmSrc.PurchaseFactor4, "OITM.PurFactor4", rule);
-                    }, "OITM.FLAP_PURCHASE", rule);
+                    
 
                     // ================= PROPIEDADES =================
                     RuleHelpers.SetIfAllowed(() =>

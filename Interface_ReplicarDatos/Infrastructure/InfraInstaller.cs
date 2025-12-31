@@ -39,6 +39,10 @@ public class InfraInstaller
         // ----- UDF en OCRD para marcar replicación -----
         CreateUDF(cmp, "OCRD", "U_Replicate", "Replicar (Y/N)", BoFieldTypes.db_Alpha, 1);
         CreateUDF(cmp, "OITM", "U_Replicate", "Replicar (Y/N)", BoFieldTypes.db_Alpha, 1);
+
+
+
+
     }
 
     // ========== Helpers privados ==========
@@ -67,13 +71,13 @@ public class InfraInstaller
                 //}
             }
         }
-        catch {}
+        catch { }
     }
 
     private static void CreateUDF(Company c, string tableName, string alias, string desc,
-                           BoFieldTypes type,  int size = 0, BoFldSubTypes subType = BoFldSubTypes.st_None)
+                           BoFieldTypes type, int size = 0, BoFldSubTypes subType = BoFldSubTypes.st_None)
     {
-        if (FieldExists(c,tableName, alias))
+        if (FieldExists(c, tableName, alias))
             return;
 
 
@@ -105,7 +109,7 @@ public class InfraInstaller
             Marshal.ReleaseComObject(uf);
         }
     }
-    private static bool FieldExists(Company c,string tableName, string fieldName)
+    private static bool FieldExists(Company c, string tableName, string fieldName)
     {
         var rs = (Recordset)c.GetBusinessObject(BoObjectTypes.BoRecordset);
         rs.DoQuery($@"
@@ -118,4 +122,60 @@ public class InfraInstaller
         System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
         return exists;
     }
+
+    public static void InsertRepCfgIfNotExists(
+        Recordset oRec,
+        string code,
+        string name,
+        string srcDb,
+        string dstDb,
+        string tableName,
+        string filterSql,
+        string excludeCsv,
+        string active,
+        string useRepProperty,
+        string repPropertyCode
+    )
+    {
+        // Escapar comillas simples para SQL HANA
+        static string Esc(string? s) => (s ?? string.Empty).Replace("'", "''");
+
+        string sql = $@"
+            INSERT INTO ""@GNA_REP_CFG""
+            (
+                ""Code"",
+                ""Name"",
+                ""U_SrcDB"",
+                ""U_DstDB"",
+                ""U_Table"",
+                ""U_FilterSQL"",
+                ""U_ExcludeCSV"",
+                ""U_Active"",
+                ""U_UseRepProperty"",
+                ""U_RepPropertyCode""
+            )
+            SELECT
+                '{Esc(code)}',
+                '{Esc(name)}',
+                '{Esc(srcDb)}',
+                '{Esc(dstDb)}',
+                '{Esc(tableName)}',
+                '{Esc(filterSql)}',
+                '{Esc(excludeCsv)}',
+                '{Esc(active)}',
+                '{Esc(useRepProperty)}',
+                '{Esc(repPropertyCode)}'
+            FROM DUMMY
+            WHERE NOT EXISTS
+            (
+                SELECT 1
+                FROM ""@GNA_REP_CFG""
+                WHERE ""Code"" = '{Esc(code)}'
+            );";
+
+        oRec.DoQuery(sql);
+    }
 }
+
+
+
