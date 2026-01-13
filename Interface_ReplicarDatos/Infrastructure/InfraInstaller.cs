@@ -19,7 +19,7 @@ public class InfraInstaller
         CreateUDF(cmp, "@GNA_REP_CFG", "U_ExcludeCSV", "Exclude Fields", BoFieldTypes.db_Memo, 254);
         CreateUDF(cmp, "@GNA_REP_CFG", "U_Active", "Active (Y/N)", BoFieldTypes.db_Alpha, 1);
         CreateUDF(cmp, "@GNA_REP_CFG", "U_UseRepProperty", "Use Flag", BoFieldTypes.db_Alpha, 1);   // Y/N
-        CreateUDF(cmp, "@GNA_REP_CFG", "U_RepRepPropertyCode", "Flag Code", BoFieldTypes.db_Alpha, 20);  // ej: P01 o U_Replicate
+        CreateUDF(cmp, "@GNA_REP_CFG", "U_RepPropertyCode", "Flag Code", BoFieldTypes.db_Alpha, 20);  // ej: P01 o U_Replicate
 
         // ----- @GNA_REP_CHECK -----
         CreateUDF(cmp, "@GNA_REP_CHECK", "U_RuleCode", "Rule Code", BoFieldTypes.db_Alpha, 50);
@@ -39,10 +39,86 @@ public class InfraInstaller
         // ----- UDF en OCRD para marcar replicación -----
         CreateUDF(cmp, "OCRD", "U_Replicate", "Replicar (Y/N)", BoFieldTypes.db_Alpha, 1);
         CreateUDF(cmp, "OITM", "U_Replicate", "Replicar (Y/N)", BoFieldTypes.db_Alpha, 1);
+        CreateUDF(cmp, "OPLN", "U_Replicate", "Replicar (Y/N)", BoFieldTypes.db_Alpha, 1);
 
+        // ----- Datos iniciales en @GNA_REP_CFG -----
+        var rs = (Recordset)cmp.GetBusinessObject(BoObjectTypes.BoRecordset);
+        try
+        {
+            // PHXA > MUNDOBB > OCRD_PROV
+            InsertRepCfgIfNotExists(
+                rs,
+                code: "PHXA>MUNDOBB>OCRD_PROV",
+                name: "Proveedores PHXA a MUNDOBB",
+                srcDb: "PHXA",
+                dstDb: "MUNDOBB",
+                tableName: "OCRD",
+                filterSql: "\"OCRD\".\"CardType\"='S'",
+                excludeCsv: "OCRD.GroupNum",
+                active: "N",
+                useRepProperty: "",
+                repPropertyCode: "");
 
+            // PHXA > ML > OCRD_PROV
+            InsertRepCfgIfNotExists(
+                rs,
+                code: "PHXA>ML>OCRD_PROV",
+                name: "Proveedores PHXA a ML",
+                srcDb: "PHXA",
+                dstDb: "ML",
+                tableName: "OCRD",
+                filterSql: "\"OCRD\".\"CardType\"='S'",
+                excludeCsv: string.Empty,
+                active: "N",
+                useRepProperty: "",
+                repPropertyCode: "");
 
+            // PHXA > PHXB > OCRD_PROV
+            InsertRepCfgIfNotExists(
+                rs,
+                code: "PHXA>PHXB>OCRD_PROV",
+                name: "Proveedores PHXA a PHXB",
+                srcDb: "PHXA",
+                dstDb: "PHXB",
+                tableName: "OCRD",
+                filterSql: "\"OCRD\".\"CardType\"='S'",
+                excludeCsv: "OCRD.GroupNum",
+                active: "N",
+                useRepProperty: "Y",
+                repPropertyCode: "U_Replicate");
 
+            // PHXA > PHXB > OCRD_CLI
+            InsertRepCfgIfNotExists(
+                rs,
+                code: "PHXA>PHXB>OCRD_CLI",
+                name: "Clientes PHXA a PHXB",
+                srcDb: "PHXA",
+                dstDb: "PHXB",
+                tableName: "OCRD",
+                filterSql: "\"OCRD\".\"CardType\"='C'",
+                excludeCsv: string.Empty,
+                active: "N",
+                useRepProperty: "Y",
+                repPropertyCode: "U_Replicate");
+
+            // PHXA > PHXB > OITM
+            InsertRepCfgIfNotExists(
+                rs,
+                code: "PHXA>PHXB>OITM",
+                name: "Articulos PHXA a PHXB",
+                srcDb: "PHXA",
+                dstDb: "PHXB",
+                tableName: "OITM",
+                filterSql: string.Empty,
+                excludeCsv: string.Empty,
+                active: "Y",
+                useRepProperty: "Y",
+                repPropertyCode: "U_Replicate");
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(rs);
+        }
     }
 
     // ========== Helpers privados ==========
@@ -62,13 +138,6 @@ public class InfraInstaller
                 ut.TableType = type;
 
                 int ret = ut.Add();
-                //if (ret != 0)
-                //{
-                //    c.GetLastError(out int code, out string msg);
-                //    // -2035 = ya existe → lo ignoramos
-                //    if (code != -2035)
-                //        throw new Exception($"Error creando UDT {tableName}: {code} - {msg}");
-                //}
             }
         }
         catch { }
@@ -94,15 +163,6 @@ public class InfraInstaller
                 uf.EditSize = size;
 
             int ret = uf.Add();
-            //if (ret != 0)
-            //{
-            //    c.GetLastError(out int code, out string msg);
-            //    // -2035 = UDF ya existe → lo ignoramos
-            //    if (code != -2035)
-            //    {
-            //        throw new Exception($"Error creando UDF {alias} en {tableName}: {code} - {msg}");
-            //    }
-            //}
         }
         finally
         {

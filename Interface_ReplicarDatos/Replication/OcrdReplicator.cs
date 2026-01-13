@@ -97,6 +97,9 @@ namespace Interface_ReplicarDatos.Replication
                         // Grupo de Cliente / Proveedor
                         RuleHelpers.SetIfAllowed(() =>
                         {
+                            if (bpSrc.GroupCode ==0)        
+                            return;
+
                             string? dstGroupCode = MasterDataMapper.MapByDescription(src, dst, table: "OCRG", codeField: "GroupCode", descField: @"""GroupName""", srcCode: bpSrc.GroupCode.ToString(), "", out string? srcGroupName);
                             if (dstGroupCode == null)
                             {
@@ -147,12 +150,16 @@ namespace Interface_ReplicarDatos.Replication
                         // Forma de envío
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstShipType = MasterDataMapper.MapByDescription(src, dst, table: "OSHP", codeField: "TrnspCode", descField: @"""TrnspName""", srcCode: bpSrc.ShippingType.ToString(), extensionWhereSQL: string.Empty, out string? srcShipType);
+                            var srcShipType = bpSrc.ShippingType;
+                            if (srcShipType ==0)
+                            return;
+
+                            string? dstShipType = MasterDataMapper.MapByDescription(src, dst, table: "OSHP", codeField: "TrnspCode", descField: @"""TrnspName""", srcCode: srcShipType.ToString(), extensionWhereSQL: string.Empty, out string? srcShipTypeName);
                             if (dstShipType == null)
                             {
-                                if (!string.IsNullOrEmpty(bpSrc.ShippingType.ToString()))
+                                if (!string.IsNullOrEmpty(srcShipTypeName))
                                 {
-                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Tipo de Envío '{srcShipType}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ShipType");
+                                    LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: bpSrc.CardCode, "WARNING", $"No se encontró mapeo para Tipo de Envío '{srcShipTypeName}' (CardCode: {bpSrc.CardCode}). Se omite la asignación.", "OCRD.ShipType");
                                 }
                                 return;
                             }
@@ -162,6 +169,9 @@ namespace Interface_ReplicarDatos.Replication
                         // Indicador de factoring
                         RuleHelpers.SetIfAllowed(() =>
                         {
+                            if (string.IsNullOrEmpty(bpSrc.Indicator))
+                            return;
+
                             string? dstIndicator = MasterDataMapper.MapByDescription(src, dst, table: "OIDC", codeField: "Code", descField: @"""Name""", srcCode: bpSrc.Indicator, "", out string? srcIndicator);
                             if (dstIndicator == null)
                             {
@@ -181,6 +191,9 @@ namespace Interface_ReplicarDatos.Replication
                         // Proyecto de socio de negocios
                         RuleHelpers.SetIfAllowed(() =>
                         {
+                            if (string.IsNullOrEmpty(bpSrc.ProjectCode))
+                            return;
+
                             string? dstProjectCode = MasterDataMapper.MapByDescription(src, dst, table: "OPRJ", codeField: "PrjCode", descField: @"""PrjName""", srcCode: bpSrc.ProjectCode, "", out string? srcProjectName);
                             if (dstProjectCode == null)
                             {
@@ -196,7 +209,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Industria
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstIndustryCode = MasterDataMapper.MapByDescription(src, dst, table: "OOND", codeField: "IndCode", descField: @"""IndName""", srcCode: bpSrc.Industry.ToString(), "", out string? srcIndustryName);
+                            var srcIndustry = bpSrc.Industry;
+                            if (srcIndustry ==0)
+                            return;
+
+                            string? dstIndustryCode = MasterDataMapper.MapByDescription(src, dst, table: "OOND", codeField: "IndCode", descField: @"""IndName""", srcCode: srcIndustry.ToString(), "", out string? srcIndustryName);
                             if (dstIndustryCode == null)
                             {
                                 if (!string.IsNullOrEmpty(srcIndustryName))
@@ -217,6 +234,9 @@ namespace Interface_ReplicarDatos.Replication
                         // Persona de contacto predeterminada
                         RuleHelpers.SetIfAllowed(() =>
                         {
+                            if (string.IsNullOrEmpty(bpSrc.ContactPerson))
+                            return;
+
                             string? dstContactPerson = MasterDataMapper.MapByDescription(src, dst, table: "OCPR", codeField: "Name", descField: @"""Name""", srcCode: bpSrc.ContactPerson, extensionWhereSQL: @$"""CardCode"" = '{bpSrc.CardCode}'", out string? srcContactPerson);
                             if (dstContactPerson == null)
                             {
@@ -242,7 +262,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Empleado del dpto.de ventas
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstSlpCode = MasterDataMapper.MapByDescription(src, dst, table: "OSLP", codeField: "SlpCode", descField: @"""SlpName""", srcCode: bpSrc.SalesPersonCode.ToString(), "", out string? srcSlpName);
+                            var srcSlpCode = bpSrc.SalesPersonCode;
+                            if (srcSlpCode == -1)
+                            return;
+
+                            string? dstSlpCode = MasterDataMapper.MapByDescription(src, dst, table: "OSLP", codeField: "SlpCode", descField: @"""SlpName""", srcCode: srcSlpCode.ToString(), "", out string? srcSlpName);
                             if (dstSlpCode == null)
                             {
                                 if (!string.IsNullOrEmpty(srcSlpName))
@@ -258,7 +282,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Responsable
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstAgentCode = MasterDataMapper.MapByDescription(src, dst, table: "OAGP", codeField: "AgentCode", descField: @"""AgentName""", srcCode: bpSrc.AgentCode.ToString(), "", out string? srcAgentName);
+                            var srcAgent = bpSrc.AgentCode;
+                            if (string.IsNullOrEmpty(srcAgent))
+                            return;
+
+                            string? dstAgentCode = MasterDataMapper.MapByDescription(src, dst, table: "OAGP", codeField: "AgentCode", descField: @"""AgentName""", srcCode: srcAgent.ToString(), "", out string? srcAgentName);
 
                             if (dstAgentCode == null)
                             {
@@ -279,7 +307,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Técnico
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstTechnicalCode = MasterDataMapper.MapByDescription(src, dst, table: "OHEM", codeField: "empID", descField: @"""firstName"" || ""lastName""", srcCode: bpSrc.DefaultTechnician.ToString(), "", out string? srcTechnicalName);
+                            var srcTech = bpSrc.DefaultTechnician;
+                            if (srcTech ==0)
+                            return;
+
+                            string? dstTechnicalCode = MasterDataMapper.MapByDescription(src, dst, table: "OHEM", codeField: "empID", descField: @"""firstName"" || ""lastName""", srcCode: srcTech.ToString(), "", out string? srcTechnicalName);
 
                             if (dstTechnicalCode == null)
                             {
@@ -297,7 +329,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Territorio
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstTerritoryID = MasterDataMapper.MapByDescription(src, dst, table: "OTER", codeField: "territryID", descField: @"""descript""", srcCode: bpSrc.Territory.ToString(), "", out string? srcTerritoryName);
+                            var srcTerritory = bpSrc.Territory;
+                            if (srcTerritory ==0)
+                            return;
+
+                            string? dstTerritoryID = MasterDataMapper.MapByDescription(src, dst, table: "OTER", codeField: "territryID", descField: @"""descript""", srcCode: srcTerritory.ToString(), "", out string? srcTerritoryName);
                             if (dstTerritoryID == null)
                             {
                                 if (!string.IsNullOrEmpty(srcTerritoryName))
@@ -313,7 +349,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Idioma
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstLangCode = MasterDataMapper.MapByDescription(src, dst, table: "OLNG", codeField: "Code", descField: @"""Name""", srcCode: bpSrc.LanguageCode.ToString(), "", out string? srcLangName);
+                            var srcLang = bpSrc.LanguageCode;
+                            if (srcLang ==0)
+                            return;
+
+                            string? dstLangCode = MasterDataMapper.MapByDescription(src, dst, table: "OLNG", codeField: "Code", descField: @"""Name""", srcCode: srcLang.ToString(), "", out string? srcLangName);
                             if (dstLangCode == null)
                             {
                                 if (!string.IsNullOrEmpty(srcLangName))
@@ -346,14 +386,14 @@ namespace Interface_ReplicarDatos.Replication
                     #region SETTERS DE DATOS - SOLAPA PERSONAS DE CONTACTO
                     RuleHelpers.SetIfAllowed(() =>
                     {
-                        for (int i = 0; i < bpSrc.ContactEmployees.Count; i++)
+                        for (int i =0; i < bpSrc.ContactEmployees.Count; i++)
                         {
                             bpSrc.ContactEmployees.SetCurrentLine(i);
                             var srcContact = bpSrc.ContactEmployees;
                             // Buscar si el contacto ya existe en el destino
                             var dstContact = bpDst.ContactEmployees;
                             bool contactExists = false;
-                            for (int j = 0; j < dstContact.Count; j++)
+                            for (int j =0; j < dstContact.Count; j++)
                             {
                                 dstContact.SetCurrentLine(j);
                                 var existingContact = dstContact;
@@ -375,6 +415,9 @@ namespace Interface_ReplicarDatos.Replication
                                     RuleHelpers.SetIfAllowed(() => existingContact.EmailGroupCode = srcContact.EmailGroupCode, "OCRD.OCPR.E_MailL", rule);
                                     RuleHelpers.SetIfAllowed(() =>
                                     {
+                                        if (string.IsNullOrEmpty(srcContact.EmailGroupCode))
+                                        return;
+
                                         string? dstEmailGroupCode = MasterDataMapper.MapByDescription(src, dst, table: "OEGP", codeField: "EmlGrpCode", descField: @"""EmlGrpName""", srcCode: srcContact.EmailGroupCode, "", out string? srcEmlGrpName);
                                         if (dstEmailGroupCode == null)
                                         {
@@ -419,6 +462,9 @@ namespace Interface_ReplicarDatos.Replication
                                 RuleHelpers.SetIfAllowed(() => dstContact.EmailGroupCode = srcContact.EmailGroupCode, "OCRD.OCPR.E_MailL", rule);
                                 RuleHelpers.SetIfAllowed(() =>
                                 {
+                                    if (string.IsNullOrEmpty(srcContact.EmailGroupCode))
+                                    return;
+
                                     string? dstEmailGroupCode = MasterDataMapper.MapByDescription(src, dst, table: "OEGP", codeField: "EmlGrpCode", descField: @"""EmlGrpName""", srcCode: srcContact.EmailGroupCode, "", out string? srcEmlGrpName);
                                     if (dstEmailGroupCode == null)
                                     {
@@ -451,14 +497,14 @@ namespace Interface_ReplicarDatos.Replication
                     #region SETTERS DE DATOS - SOLAPA DIRECCIONES 
                     RuleHelpers.SetIfAllowed(() =>
                     {
-                        for (int i = 0; i < bpSrc.Addresses.Count; i++)
+                        for (int i =0; i < bpSrc.Addresses.Count; i++)
                         {
                             bpSrc.Addresses.SetCurrentLine(i);
                             var srcAddress = bpSrc.Addresses;
                             // Buscar si la dirección ya existe en el destino
                             var dstAddress = bpDst.Addresses;
                             bool addressExists = false;
-                            for (int j = 0; j < dstAddress.Count; j++)
+                            for (int j =0; j < dstAddress.Count; j++)
                             {
                                 dstAddress.SetCurrentLine(j);
                                 var existingAddress = dstAddress;
@@ -514,7 +560,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Condición de Pago
                         RuleHelpers.SetIfAllowed(() =>
                     {
-                        string? dstGroupNum = MasterDataMapper.MapByDescription(src, dst, table: "OCTG", codeField: "GroupNum", descField: @"""PymntGroup""", srcCode: bpSrc.PayTermsGrpCode.ToString(), "", out string? srcPymntGroup);
+                        var srcPayTerms = bpSrc.PayTermsGrpCode;
+                        if (srcPayTerms ==0)
+                            return;
+
+                        string? dstGroupNum = MasterDataMapper.MapByDescription(src, dst, table: "OCTG", codeField: "GroupNum", descField: @"""PymntGroup""", srcCode: srcPayTerms.ToString(), "", out string? srcPymntGroup);
                         if (dstGroupNum == null)
                         {
                             if (!string.IsNullOrEmpty(srcPymntGroup))
@@ -533,7 +583,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Lista de precios
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstListNum = MasterDataMapper.MapByDescription(src, dst, table: "OPLN", codeField: "ListNum", descField: @"""ListName""", srcCode: bpSrc.PriceListNum.ToString(), "", out string? srcListName);
+                            var srcPriceList = bpSrc.PriceListNum;
+                            if (srcPriceList == -1)
+                            return;
+
+                            string? dstListNum = MasterDataMapper.MapByDescription(src, dst, table: "OPLN", codeField: "ListNum", descField: @"""ListName""", srcCode: srcPriceList.ToString(), "", out string? srcListName);
                             if (dstListNum == null)
                             {
                                 if (!string.IsNullOrEmpty(srcListName))
@@ -555,7 +609,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Plazo reclamaciones
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstTermCode = MasterDataMapper.MapByDescription(src, dst, table: "ODUT", codeField: "TermCode", descField: @"""TermName""", srcCode: bpSrc.DunningTerm.ToString(), "", out string? srcTermName);
+                            var srcDunning = bpSrc.DunningTerm;
+                            if (string.IsNullOrEmpty(srcDunning))
+                            return;
+
+                            string? dstTermCode = MasterDataMapper.MapByDescription(src, dst, table: "ODUT", codeField: "TermCode", descField: @"""TermName""", srcCode: srcDunning, "", out string? srcTermName);
                             if (dstTermCode == null)
                             {
                                 if (!string.IsNullOrEmpty(srcTermName))
@@ -577,7 +635,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Clase de tarjeta crédito
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstCreditCard = MasterDataMapper.MapByDescription(src, dst, table: "OCRC", codeField: "CreditCard", descField: @"""CardName""", srcCode: bpSrc.CreditCardCode.ToString(), "", out string? srcCreditCardName);
+                            var srcCreditCard = bpSrc.CreditCardCode;
+                            if (srcCreditCard ==0)
+                            return;
+
+                            string? dstCreditCard = MasterDataMapper.MapByDescription(src, dst, table: "OCRC", codeField: "CreditCard", descField: @"""CardName""", srcCode: srcCreditCard.ToString(), "", out string? srcCreditCardName);
                             if (dstCreditCard == null)
                             {
                                 if (!string.IsNullOrEmpty(srcCreditCardName))
@@ -605,7 +667,11 @@ namespace Interface_ReplicarDatos.Replication
                         // Prioridad
                         RuleHelpers.SetIfAllowed(() =>
                         {
-                            string? dstPriority = MasterDataMapper.MapByDescription(src, dst, table: "OBPP", codeField: "PrioCode", descField: @"""PrioDesc""", srcCode: bpSrc.Priority.ToString(), "", out string? srcPrioDesc);
+                            var srcPriority = bpSrc.Priority;
+                            if (srcPriority ==0)
+                            return;
+
+                            string? dstPriority = MasterDataMapper.MapByDescription(src, dst, table: "OBPP", codeField: "PrioCode", descField: @"""PrioDesc""", srcCode: srcPriority.ToString(), "", out string? srcPrioDesc);
                             if (dstPriority == null)
                             {
                                 if (!string.IsNullOrEmpty(srcPrioDesc))
@@ -656,6 +722,9 @@ namespace Interface_ReplicarDatos.Replication
                         // Banco
                         RuleHelpers.SetIfAllowed(() =>
                         {
+                            if (string.IsNullOrEmpty(bpSrc.HouseBank))
+                            return;
+
                             string? dstHouseBank = MasterDataMapper.MapByDescription(src, dst, table: "ODSC", codeField: "BankCode", descField: @"""BankName""", srcCode: bpSrc.HouseBank, "", out string? srcBankName);
                             if (dstHouseBank == null)
                             {
@@ -672,6 +741,9 @@ namespace Interface_ReplicarDatos.Replication
                         // Cuenta bancaria
                         RuleHelpers.SetIfAllowed(() =>
                         {
+                            if (string.IsNullOrEmpty(bpSrc.HouseBankAccount))
+                            return;
+
                             string? dstHouseBankAcct = MasterDataMapper.MapByDescription(src, dst, table: "DSC1", codeField: "Account", descField: @"""Account""", srcCode: bpSrc.HouseBankAccount, "", out string? srcHouseBankAccount);
 
                             if (dstHouseBankAcct == null)
@@ -703,6 +775,9 @@ namespace Interface_ReplicarDatos.Replication
                         // Código de imputación de los gastos bancarios
                         RuleHelpers.SetIfAllowed(() =>
                         {
+                            if (string.IsNullOrEmpty(bpSrc.BankChargesAllocationCode))
+                            return;
+
                             string? dstBankChargesAllocationCode = MasterDataMapper.MapByDescription(src, dst, table: "OBCA", codeField: "Code", descField: @"""Name""", srcCode: bpSrc.BankChargesAllocationCode, "", out string? srcBankChargesAllocationCode);
 
                             if (dstBankChargesAllocationCode == null)
@@ -730,6 +805,9 @@ namespace Interface_ReplicarDatos.Replication
                         // Socio comercial de consolidación
                         RuleHelpers.SetIfAllowed(() =>
                         {
+                            if (string.IsNullOrEmpty(bpSrc.FatherCard))
+                            return;
+
                             string? dstFatherCard = MasterDataMapper.MapByDescription(src, dst, table: "OCRD", codeField: "CardCode", descField: @"""CardName""", srcCode: bpSrc.FatherCard, "", out string? srcFatherName);
 
                             if (dstFatherCard == null)
@@ -753,6 +831,9 @@ namespace Interface_ReplicarDatos.Replication
                         // Proveedor conectado
                         RuleHelpers.SetIfAllowed(() =>
                         {
+                            if (string.IsNullOrEmpty(bpSrc.LinkedBusinessPartner))
+                            return;
+
                             string? dstLinkBp = MasterDataMapper.MapByDescription(src, dst, table: "OCRD", codeField: "CardCode", descField: @"""CardName""", srcCode: bpSrc.LinkedBusinessPartner, "", out string? srcLinkBpName);
 
                             if (dstLinkBp == null)
@@ -825,7 +906,7 @@ namespace Interface_ReplicarDatos.Replication
                     RuleHelpers.SetIfAllowed(() =>
                     {
                         // Nombre de la propiedad
-                        for (int i = 1; i <= 64; i++)
+                        for (int i =1; i <=64; i++)
                         {
                             string fieldName = $"QryGroup{i}";
                             RuleHelpers.SetIfAllowed(() => bpDst.Properties[i] = bpSrc.Properties[i], $"OCRD.{fieldName}", rule);
@@ -866,12 +947,17 @@ namespace Interface_ReplicarDatos.Replication
                     if (ret == 0)
                     {
                         CheckpointService.UpdateFromRow(ref cp, rs, "UpdateDate", "UpdateTS");
+                        
+                        if (dst.InTransaction)
+                            dst.EndTransaction(BoWfTransOpt.wf_Commit);
+                    } else
+                    {
+                        if (dst.InTransaction)
+                            dst.EndTransaction(BoWfTransOpt.wf_RollBack);
                     }
 
-                    if (dst.InTransaction)
-                        dst.EndTransaction(BoWfTransOpt.wf_Commit);
 
-                    rs.MoveNext();
+                        rs.MoveNext();
                 }
 
 

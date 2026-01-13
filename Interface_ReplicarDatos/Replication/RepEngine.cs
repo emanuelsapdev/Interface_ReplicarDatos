@@ -11,9 +11,11 @@ namespace Interface_ReplicarDatos.Replication
 {
     public interface IRepEngine
     {
-        void RunOcrdReplication(); // Método para replicación de socios de negocio (OCRD)
-        void RunOitmReplication(); // Método para replicación de artículos (OITM)
+        void RunOcrdReplication();      // Método para replicación de socios de negocio (OCRD)
+        void RunOitmReplication();      // Método para replicación de artículos (OITM)
+        void RunOitmPriceList();        // Método para replicación de listas de precios (ITM1)
     }
+
     public class RepEngine : IRepEngine
     {
         private readonly IDiApiConnectionFactory _factory;
@@ -32,7 +34,7 @@ namespace Interface_ReplicarDatos.Replication
 
             try
             {
-                // PHXA (PMX_TEST) es la base madre donde viven @GNA_REP_CFG y @GNA_REP_FMAP
+                // PHXA (PMX_TEST) es la base madre donde viven @GNA_REP_CFG
                 cfgCmp = _factory.Connect("PHXA");
 
                 //0) Infraestructura necesaria
@@ -47,8 +49,6 @@ namespace Interface_ReplicarDatos.Replication
                 //3) Ejecutar cada regla
                 foreach (var rule in rules)
                 {
-                    // Por diseño, SrcDB debería ser siempre "PHXA" (base madre),
-                    // pero lo sacamos de la regla por si en el futuro se amplía.
                     OcrdReplicator.Run(rule, _factory);
                 }
             }
@@ -71,7 +71,6 @@ namespace Interface_ReplicarDatos.Replication
 
             try
             {
-                // PHXA (PMX_TEST) es la base madre donde viven @GNA_REP_CFG y @GNA_REP_FMAP
                 cfgCmp = _factory.Connect("PHXA");
 
                 //0) Infraestructura necesaria
@@ -86,9 +85,45 @@ namespace Interface_ReplicarDatos.Replication
                 //3) Ejecutar cada regla
                 foreach (var rule in rules)
                 {
-                    // Por diseño, SrcDB debería ser siempre "PHXA" (base madre),
-                    // pero lo sacamos de la regla por si en el futuro se amplía.
                     OitmReplicator.Run(rule, _factory);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
+            {
+                _factory.Disconnect(cfgCmp);
+            }
+        }
+
+        /// <summary>
+        /// Ejecuta todas las reglas activas de listas de precios de artículos (ITM1) configuradas en @GNA_REP_CFG.
+        /// </summary>
+        public void RunOitmPriceList()
+        {
+            Company cfgCmp = null;
+
+            try
+            {
+                // PHXA (PMX_TEST) es la base madre donde viven @GNA_REP_CFG
+                cfgCmp = _factory.Connect("PHXA");
+
+                //0) Infraestructura necesaria
+                InfraInstaller.InstallInCompany(cfgCmp);
+
+                //1) Cargar mapeos de campos
+                FieldMappingService.LoadAll(cfgCmp);
+
+                //2) Cargar reglas activas para ITM1 / listas de precios
+                //    Puedes reutilizar "OITM" o definir un objeto lógico distinto, por ejemplo "ITM1".
+                List<RepRule> rules = RepRuleLoader.LoadActiveRules(cfgCmp, "ITM1");
+
+                //3) Ejecutar cada regla
+                foreach (var rule in rules)
+                {
+                    OitmPriceListReplicator.Run(rule, _factory);
                 }
             }
             catch (Exception ex)

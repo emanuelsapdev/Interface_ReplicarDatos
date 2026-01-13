@@ -20,6 +20,7 @@ namespace Interface_ReplicarDatos.Jobs
         {
             _logger.LogInformation("Comenzando replica de Business Partners a las {time}", DateTimeOffset.Now);
             _engine.RunOcrdReplication();
+            
             return Task.CompletedTask;
         }
     }

@@ -25,6 +25,8 @@ IHost host = Host.CreateDefaultBuilder(args)
 
             // Configuro el Job de Sync
             q.AddJobAndTrigger<OcrdReplicationJob>(hostContext.Configuration);
+            q.AddJobAndTrigger<OitmReplicationJob>(hostContext.Configuration);
+            q.AddJobAndTrigger<OitmPriceListReplicationJob>(hostContext.Configuration);
         });
 
         // Agrego los servicios
