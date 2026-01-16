@@ -36,12 +36,17 @@ namespace Interface_ReplicarDatos.Replication
                 string sql = $@"
                             SELECT
                             ""CardCode"",
-                            ""U_Replicate"",
                             ""UpdateDate"",
                             ""UpdateTS""
-                            FROM ""OCRD""
-                            WHERE (""UpdateDate"" > '{cp.LastDate:yyyy-MM-dd}'
-                            OR (""UpdateDate"" = '{cp.LastDate:yyyy-MM-dd}' AND ""UpdateTS"" > {cp.LastTime}))";
+                            FROM ""OCRD"" OCRD
+                            WHERE (OCRD.""UpdateDate"" > '{cp.LastDate:yyyy-MM-dd}'
+                            OR (OCRD.""UpdateDate"" = '{cp.LastDate:yyyy-MM-dd}' AND OCRD.""UpdateTS"" > {cp.LastTime}))";
+
+                // Si la regla usa propiedad de replicación y el flag es U_Replicate, filtramos por U_Replicate en OCRD
+                if (rule.UseRepProperty && !string.IsNullOrWhiteSpace(rule.RepPropertyCode))
+                {
+                    sql += @$" AND IFNULL(OCRD.""{rule.RepPropertyCode}"", 'Y') = 'Y'";
+                }
 
                 if (!string.IsNullOrWhiteSpace(rule.FilterSQL))
                 {
@@ -57,26 +62,13 @@ namespace Interface_ReplicarDatos.Replication
                 while (!rs.EoF)
                 {
                     // Leer campos de la base mandatoria
-                    string cardCode = rs.Fields.Item("CardCode").Value.ToString();
+                    string cardCode = rs.Fields.Item(0).Value.ToString();
                     bpSrc.GetByKey(cardCode); // cargar BP origen si es necesario
-
-                    // 2) Filtro por flag de replicación (U_Replicate o similar) según regla
-                    if (rule.UseRepProperty && !string.IsNullOrWhiteSpace(rule.RepPropertyCode))
-                    {
-                        // Para simplificar, usamos U_Replicate (ya traído).
-                        // Si BPRepPropertyCode fuera otra cosa, se puede extender aquí.
-                        bool isReplicated = bpSrc.UserFields.Fields.Item("U_Replicate").Value == "Y";
-                        if (rule.RepPropertyCode == "U_Replicate" && !isReplicated)
-                        {
-                            rs.MoveNext();
-                            continue;
-                        }
-                    }
 
                     if (!dst.InTransaction)
                         dst.StartTransaction();
 
-                    bool existsBp = bpDst.GetByKey(cardCode);
+                    bool existsBp = bpDst.GetByKey(cardCode); // 
 
                     if (!existsBp)
                     {

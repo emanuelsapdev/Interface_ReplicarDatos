@@ -9,8 +9,8 @@ namespace Interface_ReplicarDatos.Replication
     {
         public static void Run(RepRule rule, IDiApiConnectionFactory factory)
         {
-            Company src = null; // Compañía origen (PHXA)
-            Company dst = null; // Compañía destino (PHXB, etc.)
+            Company src = null; // Compañía origen (ej.: PHXA)
+            Company dst = null; // Compañía destino (ej.: PHXB)
 
             try
             {
@@ -21,34 +21,50 @@ namespace Interface_ReplicarDatos.Replication
                 // Cargar checkpoint para saber desde qué fecha/hora continuar la replicación
                 var cp = CheckpointService.LoadCheckpoint(src, rule.Code);
 
-                // Recordset para obtener los artículos cuyo precio fue modificado desde el último checkpoint
+                // Recordset para obtener los artículos/listas cuyo precio fue modificado desde el último checkpoint
                 var rsItems = (Recordset)src.GetBusinessObject(BoObjectTypes.BoRecordset);
 
-                string sql = $@"SELECT 
-                            ""ItemCode"",
-                            IFNULL(""U_Replicate"", 'N') AS ""U_Replicate"",
-                            ""UpdateDate"",
-                            ""UpdateTS"" 
-                            FROM ""OITM"" 
-                            WHERE (""UpdateDate"" > '{cp.LastDate:yyyy-MM-dd}' 
-                            OR (""UpdateDate"" = '{cp.LastDate:yyyy-MM-dd}' AND ""UpdateTS"" > {cp.LastTime})) AND ""ItemCode"" = 'NEW1'";
+                // Query base: partir de OPLN (listas de precios) -> ITM1 (precios) -> OITM (artículos)
+                // Se usa la "fecha/hora de actualización" personalizada en ITM1 (U_UpdateDate / U_UpdateTS)
+                // para detectar qué líneas de precio cambiaron desde el último checkpoint.
+                string sql = $@"
+                        SELECT DISTINCT
+                            OITM.""ItemCode"",
+                            OITM.""UpdateDate"",
+                            OITM.""UpdateTS""
+                        FROM ""OPLN"" OPLN
+                        INNER JOIN ""ITM1"" ITM1 ON ITM1.""PriceList"" = OPLN.""ListNum""
+                        INNER JOIN ""OITM"" OITM ON OITM.""ItemCode"" = ITM1.""ItemCode""
+                        WHERE
+                            (ITM1.""U_UpdateDate"" > '{cp.LastDate:yyyy-MM-dd}'
+                             OR (ITM1.""U_UpdateDate"" = '{cp.LastDate:yyyy-MM-dd}' AND ITM1.""U_UpdateTS"" > {cp.LastTime}))
+                        AND IFNULL(OPLN.""{rule.RepPropertyCode}"", 'Y') = 'Y'";
 
+                // Si la regla usa propiedad de replicación y el flag es U_Replicate (u otro),
+                // también filtramos las líneas de ITM1 por ese UDF (por ejemplo ITM1.U_Replicate = 'Y').
+                if (rule.UseRepProperty && !string.IsNullOrWhiteSpace(rule.RepPropertyCode))
+                {
+                    sql += @$" AND IFNULL(ITM1.""{rule.RepPropertyCode}"", 'Y') = 'Y'";
+                }
+
+                // Filtro adicional configurable (Rule.FilterSQL), por ejemplo filtrar por grupos de artículos, etc.
+                string filterSql = string.Empty;
                 if (!string.IsNullOrWhiteSpace(rule.FilterSQL))
                 {
                     sql += $" AND ({rule.FilterSQL})";
                 }
 
+                // Ejecutar la consulta en la compañía origen
                 rsItems.DoQuery(sql);
 
                 // Objetos Items de origen y destino (para leer y escribir listas de precios)
                 var itmSrc = (Items)src.GetBusinessObject(BoObjectTypes.oItems);
                 var itmDst = (Items)dst.GetBusinessObject(BoObjectTypes.oItems);
 
-                // Recorrer cada artículo con cambios de precio
+                // Recorrer cada artículo con al menos una línea de ITM1 que cumple las condiciones anteriores
                 while (!rsItems.EoF)
                 {
                     string itemCode = rsItems.Fields.Item("ItemCode").Value.ToString();
-
 
                     // Si el artículo no existe en destino, se omite (no se crean artículos aquí)
                     if (!itmDst.GetByKey(itemCode))
@@ -57,7 +73,7 @@ namespace Interface_ReplicarDatos.Replication
                         continue;
                     }
 
-                    // Cargar artículo de origen para leer sus listas de precios (ITM1)
+                    // Cargar artículo de origen para leer sus listas de precios (colección ITM1)
                     itmSrc.GetByKey(itemCode);
 
                     // Cantidad de listas de precios definidas en el artículo origen
@@ -68,45 +84,36 @@ namespace Interface_ReplicarDatos.Replication
                         dst.StartTransaction();
 
                     // Bloque de asignación sujeto a reglas de exclusión/permiso (RuleHelpers)
-                    bool hasChanges = false;
+                    bool hasChanges = false; // indica si hubo cambios reales en alguna lista de precios
                     RuleHelpers.SetIfAllowed(() =>
                     {
+                        // Recordset auxiliar para consultar datos de OPLN dentro del bucle de listas
+                        var rec = (Recordset)src.GetBusinessObject(BoObjectTypes.BoRecordset);
+
                         // Recorrer todas las listas de precios del artículo origen
-                        for (int i = 0; i < priceListCount; i++)
+                        for (int i =0; i < priceListCount; i++)
                         {
                             itmSrc.PriceList.SetCurrentLine(i);
-                            int srcListNum = itmSrc.PriceList.PriceList;   // ITM1.PriceList (número de lista origen)
-                            double srcPrice = itmSrc.PriceList.Price;      // ITM1.Price (precio en esa lista)
+                            int srcListNum = itmSrc.PriceList.PriceList; // ITM1.PriceList (número de lista origen)
+                            double dstPrice = itmDst.PriceList.Price;
 
-                            // Saltear listas sin precio definido (0)
-                            if (srcPrice == 0)
-                                continue;
+                            // Leer el flag de replicación en ITM1 (U_Replicate u otro definido en la regla)
+                            string valueRepProp = itmSrc.PriceList.UserFields.Fields.Item(rule.RepPropertyCode).Value;
+                            if (valueRepProp == "N") continue; // si la línea no está marcada para replicar, se omite
 
-                            // Consultar en OPLN si la lista de precios está marcada para replicación (U_Replicate = 'Y')
-                            string srcListNumStr = srcListNum.ToString();
-
-                            var rsOpln = (Recordset)src.GetBusinessObject(BoObjectTypes.BoRecordset);
-                            string q = $@"SELECT IFNULL(""U_Replicate"", 'N') FROM ""OPLN"" WHERE ""ListNum"" = {srcListNum}";
-                            rsOpln.DoQuery(q);
-                            if (!rsOpln.EoF)
-                            {
-                                string replicateFlag = rsOpln.Fields.Item(0).Value.ToString();
-                                if (replicateFlag != "Y")
-                                {
-                                    // La lista de precios no está marcada para replicación → se omite
-                                    rsOpln.MoveNext();
-                                    continue;
-                                }
-                            }
+                            // Leer también el flag de replicación a nivel de lista de precios (OPLN)
+                            rec.DoQuery($@"SELECT IFNULL(OPLN.""{rule.RepPropertyCode}"", 'Y') FROM OPLN WHERE OPLN.""ListNum"" = {srcListNum}");
+                            string repPropList = rec.Fields.Item(0).Value;
+                            if (repPropList == "N") continue; // si la lista no está marcada, se omite
 
                             // Mapear el número de lista de precios de origen a destino (OPLN)
                             string? dstListNumStr = MasterDataMapper.MapByDescription(
                                 src,
                                 dst,
-                                table: "OPLN",            // Tabla de listas de precios
-                                codeField: "ListNum",     // Código numérico de lista
+                                table: "OPLN", // Tabla de listas de precios
+                                codeField: "ListNum", // Código numérico de lista
                                 descField: @"""ListName""",
-                                srcCode: srcListNumStr,
+                                srcCode: srcListNum.ToString(),
                                 extensionWhereSQL: string.Empty,
                                 out string? srcListName);
 
@@ -127,24 +134,49 @@ namespace Interface_ReplicarDatos.Replication
                                 continue;
                             }
 
-                            //// Convertir el código de lista de destino a int
-                            //if (!int.TryParse(dstListNumStr, out int dstListNum))
-                            //    continue;
-
                             // Buscar en el Items destino la línea de ITM1 que corresponde a esa lista de precios
                             for (int j = 0; j < itmDst.PriceList.Count; j++)
                             {
                                 itmDst.PriceList.SetCurrentLine(j);
                                 if (itmDst.PriceList.PriceList == Convert.ToInt32(dstListNumStr))
                                 {
-                                    double dstPrice = itmDst.PriceList.Price;
-                                    if (Math.Abs(dstPrice - srcPrice) < 0.0000001)
+                                    // Precio origen/destino para esta lista
+                                    double srcPrice = itmSrc.PriceList.Price; // ITM1.Price (precio en esa lista)
+                                    
+
+                                    // Si el precio es igual (con tolerancia), no se hace nada
+                                    if (Math.Abs(dstPrice - srcPrice) <0.0000001)
                                         break;
 
+                                    // Actualizar precio en destino respetando reglas de replicación
                                     RuleHelpers.SetIfAllowed(
                                         () => itmDst.PriceList.Price = srcPrice,
                                         "ITM1.Price",
                                         rule);
+
+                                    double srcFactor = itmSrc.PriceList.Factor; // ITM1.Factor (factor en esa lista)
+                                    RuleHelpers.SetIfAllowed(
+                                    () => itmDst.PriceList.Factor = srcFactor,
+                                    "ITM1.Factor",
+                                    rule);
+
+                                    RuleHelpers.SetIfAllowed(() =>  // Mapeo de Lista de Precios Base
+                                    {
+                                        var srcBasePrice = itmSrc.PriceList.BasePriceList;
+                                        if (srcBasePrice == 0)
+                                            return;
+
+                                        string? dstBaseLPrice = MasterDataMapper.MapByDescription(src, dst, table: "OPLN", codeField: "ListNum", descField: @"""ListName""", srcCode: srcBasePrice.ToString(), extensionWhereSQL: string.Empty, out string? dstBaseLPriceName);
+                                        if (dstBaseLPrice == null)
+                                        {
+                                            if (!string.IsNullOrEmpty(dstBaseLPriceName))
+                                            {
+                                                LogService.WriteLog(src, ruleCode: rule.Code, table: rule.Table, key: $"item: {itemCode} | list: {srcListName}" , "WARNING", $"No se encontró mapeo para Lista de Precios Base '{dstBaseLPriceName}' (ItemCode: {itmSrc.ItemCode} / Lista de Precios: {srcListName}). Se omite la asignación.", "ITM1.BasePLNum");
+                                            }
+                                            return;
+                                        }
+                                        itmDst.PriceList.BasePriceList = int.Parse(dstBaseLPrice);
+                                    }, "ITM1.BasePLNum", rule);
 
                                     hasChanges = true;
                                     break;
@@ -152,10 +184,10 @@ namespace Interface_ReplicarDatos.Replication
                             }
 
                         }
-                    }, "ITM1.FLAP_PRICELISTS", rule); // Lógica agrupada bajo un nombre lógico de "pestaña" de listas de precios
+                    }, "ITM1.FLAP_PRICELISTS", rule); // "Pestaña" lógica de listas de precios para el motor de reglas
 
-                    // Solo llamar a Update si hubo algún cambio real
-                    int ret = 0;
+                    // Solo llamar a Update si hubo algún cambio real en las listas de precios
+                    int ret =0;
                     if (hasChanges)
                     {
                         ret = itmDst.Update();
@@ -163,13 +195,13 @@ namespace Interface_ReplicarDatos.Replication
                     }
                     else
                     {
-                        // Sin cambios: no llamamos a Update, pero tampoco es error
+                        // Sin cambios: no llamamos a Update, pero lo dejamos registrado como INFO
                         LogService.WriteLog(src, rule.Code, "ITM1", itemCode, "INFO",
                             "Sin cambios de precio detectados, se omite Update.", "ITM1.Price");
                     }
 
                     // Actualizar checkpoint con la fecha/hora del artículo procesado
-                    if (ret == 0)
+                    if (ret ==0)
                     {
                         CheckpointService.UpdateFromRow(ref cp, rsItems, "UpdateDate", "UpdateTS");
 

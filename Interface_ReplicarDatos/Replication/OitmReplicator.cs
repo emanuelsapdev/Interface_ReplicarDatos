@@ -6,8 +6,23 @@ using System;
 
 namespace Interface_ReplicarDatos.Replication
 {
+    /// <summary>
+    /// Replica artículos (tabla OITM) desde una compañía origen a una compañía destino
+    /// de SAP Business One, aplicando reglas de mapeo, filtros y checkpoints de fecha/hora.
+    /// </summary>
     public static class OitmReplicator
     {
+        /// <summary>
+        /// Ejecuta la replicación de artículos según la regla indicada:
+        /// - Conecta a las bases origen/destino.
+        /// - Calcula el checkpoint (última fecha/hora replicada).
+        /// - Lee los Items modificados desde ese checkpoint.
+        /// - Mapea y asigna campos permitidos según la regla.
+        /// - Ejecuta Add/Update en destino y maneja transacciones.
+        /// - Actualiza y persiste el checkpoint.
+        /// </summary>
+        /// <param name="rule">Regla de replicación (origen, destino, tabla, filtros, flags, etc.).</param>
+        /// <param name="factory">Fábrica para crear conexiones DI-API a SAP B1.</param>
         public static void Run(RepRule rule, IDiApiConnectionFactory factory)
         {
             Company src = null;
@@ -15,22 +30,33 @@ namespace Interface_ReplicarDatos.Replication
 
             try
             {
+                // Conectar a compañías origen y destino
                 src = factory.Connect(rule.SrcDB);
                 dst = factory.Connect(rule.DstDB);
 
+                // Cargar último checkpoint de replicación para esta regla
                 var cp = CheckpointService.LoadCheckpoint(src, rule.Code);
 
+                // Recordset origen usado para obtener los ItemCode modificados
                 var rs = (Recordset)src.GetBusinessObject(BoObjectTypes.BoRecordset);
 
+                // Consulta de artículos modificados desde el último checkpoint
+                // Se filtra por UpdateDate/UpdateTS y opcionalmente por propiedad de replicación y SQL adicional de la regla.
                 string sql = $@"SELECT 
                             ""ItemCode"",
-                            IFNULL(""U_Replicate"", 'N') AS ""U_Replicate"",
                             ""UpdateDate"",
-                            ""UpdateTS"" 
-                            FROM ""OITM"" 
-                            WHERE (""UpdateDate"" > '{cp.LastDate:yyyy-MM-dd}' 
-                            OR (""UpdateDate"" = '{cp.LastDate:yyyy-MM-dd}' AND ""UpdateTS"" > {cp.LastTime}))";
+                            ""UpdateTS""
+                            FROM ""OITM"" OITM
+                            WHERE (OITM.""UpdateDate"" > '{cp.LastDate:yyyy-MM-dd}' 
+                            OR (OITM.""UpdateDate"" = '{cp.LastDate:yyyy-MM-dd}' AND OITM.""UpdateTS"" > {cp.LastTime}))";
 
+                // Si la regla usa propiedad de replicación y el flag es U_Replicate, filtramos por U_Replicate en OITM
+                if (rule.UseRepProperty && !string.IsNullOrWhiteSpace(rule.RepPropertyCode))
+                {
+                    sql += @$" AND IFNULL(OITM.""{rule.RepPropertyCode}"", 'Y') = 'Y'";
+                }
+
+                // Filtro adicional definido en la regla (WHERE extra)
                 if (!string.IsNullOrWhiteSpace(rule.FilterSQL))
                 {
                     sql += $" AND ({rule.FilterSQL})";
@@ -38,35 +64,32 @@ namespace Interface_ReplicarDatos.Replication
 
                 rs.DoQuery(sql);
 
+                // Objetos Items de origen y destino para leer/escribir datos de OITM
                 var itmSrc = (Items)src.GetBusinessObject(BoObjectTypes.oItems);
                 var itmDst = (Items)dst.GetBusinessObject(BoObjectTypes.oItems);
 
+                // Recorremos cada ItemCode pendiente de replicar
                 while (!rs.EoF)
                 {
-                    string itemCode = rs.Fields.Item("ItemCode").Value.ToString();
+                    string itemCode = rs.Fields.Item(0).Value;
                     itmSrc.GetByKey(itemCode);
 
-                    string uRep = rs.Fields.Item("U_Replicate").Value.ToString();
-
-                    if (rule.UseRepProperty && !string.IsNullOrWhiteSpace(rule.RepPropertyCode))
-                    {
-                        if (rule.RepPropertyCode == "U_Replicate" && uRep != "Y")
-                        {
-                            rs.MoveNext();
-                            continue;
-                        }
-                    }
-
+                    // Cada artículo se procesa dentro de una transacción propia en la base destino
                     if (!dst.InTransaction)
                         dst.StartTransaction();
 
                     bool exists = itmDst.GetByKey(itemCode);
                     if (!exists)
                     {
+                        // Si el artículo no existe en destino, se inicializa con el mismo código
                         itmDst.ItemCode = itmSrc.ItemCode;
                     }
 
                     // ================= CABECERA / DATOS GENERALES =================
+                    // Cada bloque se envuelve en RuleHelpers.SetIfAllowed para:
+                    // - Respetar los campos excluidos en la regla (ExcludeFields).
+                    // - Permitir asignaciones forzadas desde AssignJSON.
+                    // - Centralizar el control de qué campos se pueden modificar.
                     RuleHelpers.SetIfAllowed(() =>
                     {
                         RuleHelpers.SetIfAllowed(() => itmDst.ItemName = itmSrc.ItemName, "OITM.ItemName", rule); // NOMBRE ARTICULO
@@ -74,6 +97,7 @@ namespace Interface_ReplicarDatos.Replication
                         RuleHelpers.SetIfAllowed(() => itmDst.ItemType = itmSrc.ItemType, "OITM.ItemType", rule); // CLASE DE ARTICULO
                         RuleHelpers.SetIfAllowed(() => // GRUPOS DE ARTICULOS
                         {
+                            // Mapeo de grupo de artículos entre compañías por descripción (OITB.ItmsGrpNam)
                             string? dstItemGrpCode = MasterDataMapper.MapByDescription(src, dst, table: "OITB", codeField: "ItmsGrpCod", descField: @"""ItmsGrpNam""", srcCode: itmSrc.ItemsGroupCode.ToString(), "", out string? srcItemGroupName);
                             if (dstItemGrpCode == null)
                             {
@@ -89,6 +113,7 @@ namespace Interface_ReplicarDatos.Replication
 
                         RuleHelpers.SetIfAllowed(() => // GRUPOS DE UNIDADES DE MEDIDA 
                         {
+                            // Mapeo de grupo de UoM por descripción (OUGP.UgpCode)
                             string? dstUgpCode = MasterDataMapper.MapByDescription(src, dst, table: "OUGP", codeField: "UgpEntry", descField: @"""UgpCode""", srcCode: itmSrc.UoMGroupEntry.ToString(), "", out string? srcUgpCode);
                             if (dstUgpCode == null)
                             {
@@ -106,6 +131,7 @@ namespace Interface_ReplicarDatos.Replication
 
                         RuleHelpers.SetIfAllowed(() => // UNIDAD DE DETERMINACIÓN DE PRECIOS
                         {
+                            // Mapeo de unidad de determinación de precios (OUOM.UomCode)
                             string? dstPricingUnit = MasterDataMapper.MapByDescription(src, dst, table: "OUOM", codeField: "UomEntry", descField: @"""UomCode""", srcCode: itmSrc.PricingUnit.ToString(), "", out string? srcPricingUnit);
                             if (dstPricingUnit == null)
                             {
@@ -139,8 +165,7 @@ namespace Interface_ReplicarDatos.Replication
 
                         RuleHelpers.SetIfAllowed(() => // FORMA DE ENVÍO
                         {
-
-
+                            // Mapeo de forma de envío por descripción (OSHP.TrnspName)
                             string? dstShipType = MasterDataMapper.MapByDescription(src, dst, table: "OSHP", codeField: "TrnspCode", descField: @"""TrnspName""", srcCode: itmSrc.ShipType.ToString(), "", out string? srcShipTypeNam);
                             if (dstShipType == null)
                             {
@@ -174,6 +199,7 @@ namespace Interface_ReplicarDatos.Replication
                             if (string.IsNullOrEmpty(srcBpCode))
                                 return;
 
+                            // Mapeo de proveedor predeterminado entre compañías (OCRD.CardCode/CardName)
                             string? dstSuppCardCode = MasterDataMapper.MapByDescription(
                                 src, dst,
                                 table: "OCRD",
@@ -221,6 +247,7 @@ namespace Interface_ReplicarDatos.Replication
                             itmDst.PurchaseUnit = srcBuyUnit;
 
 
+                            // Mapeo de unidad de medida de compras (OUOM.UomCode)
                             string? dstBuyUnit = MasterDataMapper.MapByDescription(
                                 src, dst,
                                 table: "OUOM",
@@ -324,6 +351,7 @@ namespace Interface_ReplicarDatos.Replication
                             if (string.IsNullOrEmpty(srcSalesUnit))
                                 return;
 
+                            // Mapeo de unidad de medida de ventas (OUOM.UomCode)
                             string? dstSalesUnit = MasterDataMapper.MapByDescription(
                                 src,
                                 dst,
@@ -440,6 +468,7 @@ namespace Interface_ReplicarDatos.Replication
                             if (string.IsNullOrEmpty(srcCntUomEntry) || srcCntUomEntry == "0")
                                 return;
 
+                            // Mapeo de unidad de recuento de inventario (OUOM.UomEntry/UomCode)
                             string? dstCntUomEntryStr = MasterDataMapper.MapByDescription(
                                 src,
                                 dst,
@@ -495,7 +524,8 @@ namespace Interface_ReplicarDatos.Replication
                     // ================= PROPIEDADES =================
                     RuleHelpers.SetIfAllowed(() =>
                     {
-                        for (int i = 1; i <= 64; i++)
+                        // Replicación de las64 propiedades de artículo (grupos de consulta QryGroup1..64)
+                        for (int i =1; i <=64; i++)
                         {
                             string fieldName = $"QryGroup{i}";
                             RuleHelpers.SetIfAllowed(() => itmDst.Properties[i] = itmSrc.Properties[i], $"OITM.{fieldName}", rule);
@@ -524,6 +554,7 @@ namespace Interface_ReplicarDatos.Replication
                             if (string.IsNullOrWhiteSpace(srcInterval) || srcInterval == "0")
                                 return;
 
+                            // Mapeo de intervalo de pedido por descripción (OCYC.Name)
                             string? dstIntervalStr = MasterDataMapper.MapByDescription(
                                 src,
                                 dst,
@@ -615,7 +646,7 @@ namespace Interface_ReplicarDatos.Replication
                     // ================= COMENTARIOS =================
                     RuleHelpers.SetIfAllowed(() =>
                     {
-                        // Artículo ficticio
+                        // Comentarios de usuario del artículo
                         RuleHelpers.SetIfAllowed(
                             () => itmDst.User_Text = itmSrc.User_Text,
                             "OITM.UserText",
@@ -623,12 +654,16 @@ namespace Interface_ReplicarDatos.Replication
 
                     }, "OITM.FLAP_COMMENTS", rule);
 
+                    // Ejecutar Add/Update del artículo en la compañía destino
                     int ret = exists ? itmDst.Update() : itmDst.Add();
 
                     LogService.HandleDiApiResult(src, dst, ret, rule.Code, "OITM", itemCode);
 
-                    // Actualizar checkpoint con la fila actual
-                    if (ret == 0)
+                    // Si la operación en destino fue exitosa:
+                    // - avanzamos el checkpoint a la fecha/hora del registro actual
+                    // - confirmamos la transacción en la base destino.
+                    // Si falló, deshacemos la transacción.
+                    if (ret ==0)
                     {
                         CheckpointService.UpdateFromRow(ref cp, rs, "UpdateDate", "UpdateTS");
 
@@ -645,7 +680,7 @@ namespace Interface_ReplicarDatos.Replication
                     rs.MoveNext();
                 }
 
-
+                // Guardar checkpoint definitivo y liberar recursos COM
                 CheckpointService.PersistCheckpoint(src, rule.Code, cp);
 
                 System.Runtime.InteropServices.Marshal.ReleaseComObject(rs);
@@ -654,6 +689,7 @@ namespace Interface_ReplicarDatos.Replication
             }
             finally
             {
+                // Asegurar desconexión de ambas compañías aunque ocurra una excepción
                 factory.Disconnect(dst);
                 factory.Disconnect(src);
             }
